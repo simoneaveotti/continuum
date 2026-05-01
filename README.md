@@ -2,79 +2,6 @@
 
 A terminal-first context orchestration tool for AI-assisted software development.
 
-Continuum reduces the cost of restarting work across machines, sessions, projects, and agents. It is local-first, privacy-aware, agent-agnostic, and offline-capable.
-
-## Quick Start
-
-If you want to try Continuum local-only in under a minute:
-
-```bash
-ctx init
-ctx project init my-project
-ctx agent install --project=my-project
-ctx context --project=my-project
-```
-
-Then, after meaningful progress:
-
-```bash
-ctx capture my-task --project=my-project --yes <<'EOF'
-## Objective
-One-line goal
-
-## Current State
-- What is done
-
-## Next Step
-- What should happen next
-
-## Constraints
-- Hard constraints
-
-## Active Issues
-- Open issues
-EOF
-```
-
-## Quick Start on a New Computer
-
-If you already have Continuum data from another machine, the setup depends on how that storage is managed.
-
-If your Continuum storage is synced to a git remote:
-
-This assumes the remote repository already exists and is dedicated to Continuum storage.
-
-```bash
-# create a dedicated private git repository for Continuum storage first
-ctx init --remote=git@github.com:you/continuum-state.git
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.name "Your Name"
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.email "you@example.com"
-ctx resume
-ctx context --project=my-project
-```
-
-If your Continuum storage exists only on the old machine:
-
-```bash
-# copy ${CONTINUUM_PATH:-$HOME/.continuum} from the old machine to the new one
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.name "Your Name"
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.email "you@example.com"
-ctx resume
-ctx context --project=my-project
-```
-
-Notes:
-
-- `ctx init` uses `~/.continuum/` by default
-- set `CONTINUUM_PATH` if this machine should use a different storage location
-- use a dedicated git repository for Continuum storage, not your application repository
-- if you use different git identities for different storage instances, prefer repo-local config with `git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config ...` instead of `--global`
-- git-backed storage requires `git user.name` and `git user.email` before `ctx resume`, `ctx capture`, or `ctx sync`
-- `ctx resume` should be the first command at the start of a session on an existing storage
-- `ctx sync` is still valid when you only want to pull/push storage state; `ctx resume` wraps health checks, safe repair, sync, and global orientation
-- agents inside a known project should start with `ctx context --project=<project>` and `ctx list --project=<project>` rather than `ctx resume`
-- if the old storage looks corrupted or incomplete, back it up first and run `ctx repair` before relying on it
-
 ## What It Does
 
 Continuum gives you an explicit way to:
@@ -85,15 +12,26 @@ Continuum gives you an explicit way to:
 
 It does not replace your workflow. It supports it.
 
+The user initializes storage, creates projects, and installs bootstrap
+instructions into the workspace. When an agent starts, it reads those
+instructions and knows to retrieve context via `ctx` before doing anything else.
+How much the agent does from there depends on the agent and how it was configured.
+
 ## Core Model
 
 Continuum separates three concerns:
 
-- Environment: managed locally with `ctx init`
-- Agent behavior: injected into the workspace with `ctx agent install`
-- Context/state: stored outside the repo and retrieved via `ctx`
+- **Environment** — managed by the user (`ctx init`, `ctx project init`)
+- **Agent behavior** — injected into the workspace (`ctx agent install`)
+- **Context/state** — stored outside the repo, retrieved via `ctx`
 
-There is no automatic discovery. Agents must be told to use Continuum explicitly.
+There is no automatic discovery. The agent must be explicitly bootstrapped.
+
+Two commands worth distinguishing:
+
+    ctx resume    — for the user: validates storage health, syncs, and orients
+    ctx sync      — for the user: pull/push storage state without health checks
+    ctx context   — for the agent: loads operational state for a specific project
 
 ## Important Constraint
 
@@ -112,46 +50,7 @@ sudo cp ctx /usr/local/bin/
 xattr -c /usr/local/bin/ctx 2>/dev/null || true
 ```
 
-### Distribution
-
-Continuum is a single statically-linked Go binary (`ctx`) with no runtime dependency beyond `git` and optional `gpg` for encrypted exports.
-
-Primary release targets:
-
-| Platform | Arch | Notes |
-|---|---|---|
-| macOS | arm64 | Apple Silicon primary target |
-| macOS | amd64 | Intel Mac |
-| Linux | amd64 | x86_64 servers and desktops |
-| Linux | arm64 | Raspberry Pi and ARM servers |
-| Windows | amd64 | Secondary target |
-
-Release automation is handled by GitHub Actions and GoReleaser.
-
-- push a `v*` tag to trigger `.github/workflows/release.yml`
-- GoReleaser builds archives, checksums, GitHub draft releases, and a Homebrew formula update
-- the direct install fallback is `install.sh`
-
-Typical release flow:
-
-```bash
-go test ./...
-git tag v0.6.0 -m "v0.6.0"
-git push origin v0.6.0
-```
-
-Homebrew target:
-
-```bash
-brew tap simoneaveotti/continuum
-brew install continuum
-```
-
-Direct install fallback:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/simoneaveotti/continuum/main/install.sh | bash
-```
+For release automation, Homebrew tap, and distribution details, see [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Core Usage
 
@@ -274,6 +173,10 @@ EOF
 
 The same pattern applies to `ctx handoff` and `ctx snapshot refresh`.
 
+For git sync, watch mode, history, and session recovery, see [docs/sync.md](docs/sync.md).
+For storage patterns and multi-instance setups, see [docs/storage.md](docs/storage.md).
+For export encryption, see [docs/encryption.md](docs/encryption.md).
+
 ## Commands
 
 ### Setup
@@ -329,221 +232,7 @@ The same pattern applies to `ctx handoff` and `ctx snapshot refresh`.
 
 `ctx export` now produces archives that `ctx import` can restore directly.
 
-## Advanced
-
-### Git Sync & Recovery
-
-Continuum keeps `~/.continuum/` inside a git repo. Use `ctx sync` to pull/push with a remote, and `ctx repair` when git detects corruption.
-
-Before using git-backed writes, ensure git identity is configured for Continuum commits.
-If you use different identities for different Continuum storage instances, prefer repo-local configuration on the active Continuum storage path:
-
-```bash
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.name "Your Name"
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.email "you@example.com"
-```
-
-Use `--global` only if this machine should use the same git identity for every Continuum storage instance.
-
-If your machine hostname is unstable or polluted by local aliases such as DDEV entries in `/etc/hosts`, set a stable local Continuum host identity:
-
-```bash
-ctx config set host workstation-rome
-```
-
-For temporary overrides in CI or scripted environments, `CONTINUUM_HOST` takes precedence over the saved local value.
-
-- `ctx sync [--remote=<url>]` runs `git pull --rebase origin main` and `git push origin main`, adds the remote when `--remote` is provided, and bootstraps `origin/main` on the first sync if the remote is still empty
-- failed pushes mark the commit hash in `~/.continuum/local/unsynced`
-- `ctx repair` runs `git fsck`, aborts in-progress merge/rebase state, and can create a backup before suggesting a remote restore path
-- `ctx repair --activity` deduplicates and normalizes `events/activity.ndjson` when the shared activity log accumulates duplicate or malformed lines
-- `ctx init --remote=<url>` clones a fresh Continuum repo when `~/.continuum/` is empty
-
-Recommended start-of-session flow:
-
-```bash
-ctx resume
-ctx context --project=<project> --compact
-```
-
-Interpretation:
-
-- start every new work session with `ctx resume` before choosing a project
-- `ctx resume` validates storage health, attempts repair when safe, runs sync when the repo is clean, and prints a global orientation view before any project is selected
-- after `ctx resume`, use `ctx context` or `ctx list` to choose what to resume
-- use `ctx sync` directly when you only need to synchronize storage and do not need repair/orientation output
-- use `ctx context --project=<project> --compact` for project/task operational state; it is not a replacement for storage-level `ctx resume`
-- use full `ctx context --project=<project>` when compact output is insufficient for the requested work
-
-Why this matters:
-
-- if you skip the start-of-session sync step, you can begin work on stale local state
-- later writes may still succeed locally, but push failures and unsynced commits will surface only after you are already in the middle of work
-- project/task selection becomes less trustworthy because you may be looking at an outdated local snapshot
-
-- if storage is healthy and clean: `ctx resume` syncs and shows you what is available to resume
-- if a merge/rebase is stuck: `ctx resume` should repair it automatically when safe, or stop with a clear message
-- if the working tree is dirty: `ctx resume` should stop and tell you to resolve local changes before continuing
-- if the remote is missing or unreachable: `ctx resume` should say so explicitly and leave the storage in local-only mode until sync works again
-
-Typical flows:
-
-```bash
-ctx sync --remote=<url>
-ctx init --remote=<url>
-```
-
-The `local/unsynced` file lists pending commit hashes, and `local/git.log` records real git errors. `ctx context` surfaces pending unsynced commits so agents can act accordingly.
-
-### Watch Mode
-
-`ctx watch [--project=<name>] [--interval=<duration>]` is the current visibility MVP.
-
-- it polls a shared append-only activity stream in Continuum storage
-- if `--project` is omitted, it watches every project
-- it prints lifecycle events such as task creation, task writes, export/import, repair, agent install/remove, and sync activity
-- `ctx watch --tui` opens a terminal UI on top of the same stream
-- inside the TUI, `p` cycles the project filter and `P` returns to all projects
-
-Example:
-
-```bash
-ctx watch
-ctx watch --project=continuum
-ctx watch --project=continuum --interval=5s
-ctx watch --tui
-```
-
-### History
-
-`ctx history [--project=<name>] [--task=<name>] [--limit=<n>] [--since=<duration>]` prints a static narrative timeline from the Continuum activity stream.
-
-- it is meant for retrospective review, unlike `ctx watch`, which is live
-- it renders events chronologically, oldest to newest
-- it can be scoped to a project or a specific task
-- it can be trimmed to the most recent N events or a recent time window
-
-Example:
-
-```bash
-ctx history --project=continuum
-ctx history --project=continuum --task=history-command
-ctx history --project=continuum --limit=20 --since=7d
-```
-
-### Export Encryption
-
-Continuum can protect exported archives with a passphrase via `ctx export --encrypt`.
-
-- the default format is `aes-gcm-v2`, which uses Argon2id-derived keys and embeds the parameters needed for decryption
-- this is practical file protection, not enterprise key management
-- passphrases are read from stdin; interactive entry is safer than piping literals from shell commands
-
-### Storage Patterns
-
-Continuum stores all state in a local directory (default: `~/.continuum/`).
-`CONTINUUM_PATH` overrides this location.
-
-Because each `CONTINUUM_PATH` is an independent storage instance with its own git repository, remote, and project set, you can run multiple isolated Continuum instances side by side with different sync policies and access rules.
-
-#### Pattern 1 — Single storage, no remote
-
-Everything is local. No sync. No cloud dependency.
-
-```bash
-ctx init
-ctx project init my-project
-ctx context --project=my-project
-```
-
-Use when: single machine, personal projects, getting started.
-
-#### Pattern 2 — Single storage with remote
-
-One storage, synced across machines through a git remote.
-
-Create a dedicated private git repository for this storage first, for example on GitHub, GitLab, or Gitea.
-Do not reuse your application repository for Continuum state.
-
-```bash
-ctx sync --remote=git@github.com:you/continuum-state.git
-```
-
-From a second machine:
-
-This assumes the same remote repository already exists and is reachable from that machine.
-
-```bash
-ctx init --remote=git@github.com:you/continuum-state.git
-```
-
-Use when: multiple workstations, same context everywhere.
-
-#### Pattern 3 — Multiple storage instances for sensitive projects
-
-Run a second Continuum instance in a different directory:
-
-```bash
-# Normal projects — synced
-ctx context --project=my-app
-
-# Sensitive project — local only
-CONTINUUM_PATH=~/.continuum-private ctx context --project=sensitive-project
-```
-
-The sensitive storage has no remote configured. Agents working there must be bootstrapped with the correct `CONTINUUM_PATH`.
-
-Use when: regulated, healthcare, client-confidential, or otherwise non-syncable work.
-
-#### Pattern 4 — Multiple storage instances with separate remotes
-
-Each storage instance can point to a different remote:
-
-```text
-~/.continuum/          -> github.com/you/ctx-work
-~/.continuum-private/  -> gitea.yourserver.com/you/ctx-private
-~/.continuum-client/   -> github.com/you/ctx-client-x
-```
-
-Each instance stays independent: different projects, different remotes, different sync rules.
-
-Use when: multi-client consulting, residency separation, or strict project boundaries.
-
-#### Pattern 5 — Work / personal separation
-
-Common setup for employed developers or consultants:
-
-```text
-~/.continuum/          -> company remote
-~/.continuum-personal/ -> personal remote
-```
-
-You can switch automatically with project-specific shell config such as:
-
-```bash
-# in .envrc for personal projects
-export CONTINUUM_PATH=~/.continuum-personal
-```
-
-Use when: company and personal work must stay fully separate.
-
-#### Security Model
-
-Continuum does not enforce access control between agents. Separation here is path isolation: an agent that does not know a `CONTINUUM_PATH` value cannot access that storage instance.
-
-This is path-level isolation, not a cryptographic guarantee. For stronger local guarantees, keep sensitive storage unsynced and lock down directory permissions, for example:
-
-```bash
-chmod 700 ~/.continuum-private
-```
-
-Agents working on sensitive storage should be bootstrapped with the correct `CONTINUUM_PATH` explicitly set in their environment or launcher.
-
 ## Storage Model
-
-Continuum stores all data locally (default: `~/.continuum/`).
-
-Example for project `my-project` and task `my-task`:
 
 ```text
 ~/.continuum/
@@ -571,8 +260,6 @@ Example for project `my-project` and task `my-task`:
 │   └── unsynced
 └── exports/
 ```
-
-Edit `~/.continuum/agent-targets.txt` to add support for any agent instruction file (`AGENTS.md`, `GEMINI.md`, `.cursorrules`, and so on).
 
 ## Design Principles
 
