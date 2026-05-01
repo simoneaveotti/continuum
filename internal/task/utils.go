@@ -3,7 +3,11 @@ package task
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"os"
 	"strings"
+
+	"continuum/internal/parse"
 )
 
 func promptWithDefault(reader *bufio.Reader, label, current string) (string, error) {
@@ -28,63 +32,55 @@ func promptWithDefault(reader *bufio.Reader, label, current string) (string, err
 }
 
 func parseSections(content string) map[string]string {
-	sections := make(map[string]string)
-
-	lines := strings.Split(content, "\n")
-
-	var current string
-	var builder strings.Builder
-
-	flush := func() {
-		if current != "" {
-			sections[current] = strings.TrimSpace(builder.String())
-			builder.Reset()
-		}
-	}
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "## ") {
-			flush()
-			current = strings.TrimPrefix(line, "## ")
-			continue
-		}
-
-		if strings.HasPrefix(line, "# ") {
-			flush()
-			current = ""
-			continue
-		}
-
-		if current != "" {
-			builder.WriteString(line)
-			builder.WriteString("\n")
-		}
-	}
-
-	flush()
-
-	return sections
+	return parse.Sections(content)
 }
 
 func cleanPrefill(value string) string {
-	value = strings.TrimSpace(value)
+	return parse.CleanValue(value)
+}
 
-	lines := strings.Split(value, "\n")
-	cleaned := make([]string, 0, len(lines))
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		if strings.HasPrefix(line, "-") {
-			line = strings.TrimSpace(strings.TrimPrefix(line, "-"))
+func confirmAndSave(taskName, summary string, piped, autoConfirm bool, save func() error, savedMessage string) error {
+	if autoConfirm {
+		fmt.Printf("\nProposed update for task '%s':\n\n%s\n\n", taskName, summary)
+		if err := save(); err != nil {
+			return err
 		}
-
-		if line == "" || line == "-" {
-			continue
-		}
-
-		cleaned = append(cleaned, line)
+		fmt.Println("Auto-confirmed with --yes.")
+		fmt.Println(savedMessage)
+		return nil
 	}
 
-	return strings.Join(cleaned, " | ")
+	fmt.Printf("\nProposed update for task '%s':\n\n%s\n\nApply this update? [y] yes  [n] no\n",
+		taskName, summary)
+
+	fmt.Print("> ")
+
+	var confirmReader *bufio.Reader
+	if piped {
+		tty, err := os.Open("/dev/tty")
+		if err != nil {
+			return fmt.Errorf("cannot open /dev/tty for confirmation: %w", err)
+		}
+		defer tty.Close()
+		confirmReader = bufio.NewReader(tty)
+	} else {
+		confirmReader = bufio.NewReader(os.Stdin)
+	}
+
+	input, err := confirmReader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return fmt.Errorf("cannot read input: %w", err)
+	}
+
+	switch strings.TrimSpace(strings.ToLower(input)) {
+	case "y", "yes":
+		if err := save(); err != nil {
+			return err
+		}
+		fmt.Println(savedMessage)
+	default:
+		fmt.Println("Discarded.")
+	}
+
+	return nil
 }

@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"continuum/internal/events"
+	"continuum/internal/setup"
 )
 
 func ensureDir(path string) error {
@@ -21,134 +24,69 @@ func ensureFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
-func snapshotTemplate(task string) string {
-	return fmt.Sprintf(`# TASK SNAPSHOT
-
-## Task
-%s
-
-## Objective
-...
-
-## Current State
-- ...
-
-## Decisions (Locked)
-- ...
-
-## Relevant Files
-- ...
-
-## Last Step Completed
-- ...
-
-## Next Step
-- ...
-
-## Active Issues
-- ...
-
-## Constraints
-- ...
-
-## Git Context
-- branch: unknown
-- status: unknown
-
-## Things Not To Revisit
-- ...
-
-## Suggested Prompt Seed
-Continue this task using the snapshot, handoff, and project context. Do not reopen locked decisions unless new evidence appears.
-
-## Last Updated
-...
-`, task)
-}
-
-func handoffTemplate(task string) string {
-	return fmt.Sprintf(`# TASK HANDOFF
-
-## Task
-%s
-
-## Objective
-...
-
-## What Was Done
-- ...
-
-## Current State
-- ...
-
-## Decisions Confirmed
-- ...
-
-## Relevant Files
-- ...
-
-## Risks / Caveats
-- ...
-
-## Next Recommended Step
-- ...
-
-## Agent Notes
-- ...
-
-# SURVEY FOR NEXT AGENT
-
-## Unresolved Questions
-- ...
-
-## Assumptions To Validate
-- ...
-
-## Things That Might Be Wrong
-- ...
-
-## Missing Context
-- ...
-
-## Ask Before Proceeding If
-- ...
-
-## Suggested First Action
-- ...
-
-## Last Updated
-...
-`, task)
-}
-
 const notesTemplate = `# TASK NOTES
 
 - ...
 `
 
-func Start(task string) error {
-	if task == "" {
-		return fmt.Errorf("task name is required")
+type StartResult int
+
+const (
+	StartCreated StartResult = iota
+	StartAlreadyActive
+)
+
+func Start(task, project string) (StartResult, error) {
+	if project == "" {
+		project = "default"
+	}
+	if err := setup.ValidateTaskName(task); err != nil {
+		return StartCreated, err
+	}
+	if err := setup.ValidateProjectName(project); err != nil {
+		return StartCreated, err
 	}
 
-	taskDir := filepath.Join(".continuum", "tasks", task)
+	taskDir := filepath.Join(setup.ContinuumPath(), "projects", project, "tasks", task)
+	if info, err := os.Stat(taskDir); err == nil && info.IsDir() {
+		status, err := readStatus(taskDir)
+		if err != nil {
+			return StartCreated, err
+		}
+		if status == StatusActive {
+			return StartAlreadyActive, nil
+		}
+		return StartCreated, fmt.Errorf("task '%s' already exists and is closed; use `ctx task reopen %s --project=%s`", task, task, project)
+	} else if err != nil && !os.IsNotExist(err) {
+		return StartCreated, fmt.Errorf("cannot access task directory %s: %w", taskDir, err)
+	}
 
 	if err := ensureDir(taskDir); err != nil {
-		return fmt.Errorf("cannot create task directory %s: %w", taskDir, err)
-	}
-
-	if err := ensureFile(filepath.Join(taskDir, "snapshot.md"), snapshotTemplate(task)); err != nil {
-		return fmt.Errorf("cannot create snapshot.md: %w", err)
-	}
-
-	if err := ensureFile(filepath.Join(taskDir, "handoff.md"), handoffTemplate(task)); err != nil {
-		return fmt.Errorf("cannot create handoff.md: %w", err)
+		return StartCreated, fmt.Errorf("cannot create task directory %s: %w", taskDir, err)
 	}
 
 	if err := ensureFile(filepath.Join(taskDir, "notes.md"), notesTemplate); err != nil {
-		return fmt.Errorf("cannot create notes.md: %w", err)
+		return StartCreated, fmt.Errorf("cannot create notes.md: %w", err)
+	}
+	if _, err := os.Stat(filepath.Join(taskDir, metadataFileName)); os.IsNotExist(err) {
+		if err := writeStatus(taskDir, StatusActive); err != nil {
+			return StartCreated, fmt.Errorf("cannot create %s: %w", metadataFileName, err)
+		}
+	} else if err != nil {
+		return StartCreated, fmt.Errorf("cannot access %s: %w", metadataFileName, err)
 	}
 
-	fmt.Printf("Task '%s' initialized in %s\n", task, taskDir)
-	return nil
+	notesFile := filepath.ToSlash(filepath.Join("projects", project, "tasks", task, "notes.md"))
+	metadataFile := filepath.ToSlash(filepath.Join("projects", project, "tasks", task, metadataFileName))
+	files := []string{notesFile, metadataFile}
+	if err := events.Append(project, task, "task_started", "ok", "task created"); err == nil {
+		files = append([]string{events.ActivityRelPath()}, files...)
+	}
+	if err := setup.CommitFiles(buildCommitMessage(project, task, "start", "task initialized"), files); err != nil {
+		return StartCreated, fmt.Errorf("cannot save git history: %w", err)
+	}
+	setup.PushBestEffort()
+
+	fmt.Printf("Task '%s' initialized in .continuum/projects/%s/tasks/%s\n", task, project, task)
+	return StartCreated, nil
 }

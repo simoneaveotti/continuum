@@ -1,2 +1,9 @@
 .continuum/
 ctx
+tmp/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+agent.md
+.agents.md
+.claude.md

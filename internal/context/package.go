@@ -2,7 +2,29 @@ package context
 
 import (
 	"strings"
+
+	"continuum/internal/parse"
 )
+
+func isEmpty(s string) bool {
+	s = strings.TrimSpace(s)
+	return s == "" || s == "..."
+}
+
+func cleanValue(value string) string {
+	return parse.CleanValue(value)
+}
+
+func writeSection(b *strings.Builder, title, value string) {
+	value = cleanValue(value)
+	if isEmpty(value) {
+		return
+	}
+	b.WriteString(title)
+	b.WriteString(": ")
+	b.WriteString(value)
+	b.WriteString("\n\n")
+}
 
 func BuildPromptOnlyPackage(ctx *ContextData) string {
 	snap := ParseSections(ctx.Snapshot)
@@ -10,63 +32,38 @@ func BuildPromptOnlyPackage(ctx *ContextData) string {
 
 	var b strings.Builder
 
-	b.WriteString("=== CONTEXT ===\n\n")
+	b.WriteString("=== OBJECTIVE ===\n\n")
+	writeSection(&b, "Goal", snap["Objective"])
+	writeSection(&b, "Current State", snap["Current State"])
+	writeSection(&b, "Next Step", snap["Next Step"])
+	writeSection(&b, "Decisions", snap["Decisions (Locked)"])
+	writeSection(&b, "Issues", snap["Active Issues"])
+	writeSection(&b, "Constraints", snap["Constraints"])
+	writeSection(&b, "Files", snap["Relevant Files"])
 
-	b.WriteString("OBJECTIVE:\n")
-	b.WriteString(snap["Objective"])
-	b.WriteString("\n\n")
+	b.WriteString("=== LAST SESSION ===\n\n")
+	writeSection(&b, "What Was Done", handoff["What Was Done"])
+	writeSection(&b, "Risks", handoff["Risks / Caveats"])
+	writeSection(&b, "Agent Notes", handoff["Agent Notes"])
 
-	b.WriteString("CURRENT STATE:\n")
-	b.WriteString(snap["Current State"])
-	b.WriteString("\n\n")
+	b.WriteString("=== GUIDANCE ===\n\n")
+	writeSection(&b, "Next Step", handoff["Next Recommended Step"])
+	writeSection(&b, "First Action", handoff["Suggested First Action"])
 
-	b.WriteString("NEXT STEP:\n")
-	b.WriteString(snap["Next Step"])
-	b.WriteString("\n\n")
+	b.WriteString("=== UNCERTAINTY ===\n\n")
+	writeSection(&b, "Questions", handoff["Unresolved Questions"])
+	writeSection(&b, "Assumptions", handoff["Assumptions To Validate"])
+	writeSection(&b, "Might Be Wrong", handoff["Things That Might Be Wrong"])
+	writeSection(&b, "Missing", handoff["Missing Context"])
+	writeSection(&b, "Ask Before Proceeding", handoff["Ask Before Proceeding If"])
 
-	b.WriteString("ISSUES:\n")
-	b.WriteString(snap["Active Issues"])
-	b.WriteString("\n\n")
-
-	b.WriteString("DECISIONS:\n")
-	b.WriteString(snap["Decisions (Locked)"])
-	b.WriteString("\n\n")
-
-	b.WriteString("=== HANDOFF ===\n\n")
-
-	b.WriteString("WHAT WAS DONE:\n")
-	b.WriteString(handoff["What Was Done"])
-	b.WriteString("\n\n")
-
-	b.WriteString("NEXT:\n")
-	b.WriteString(handoff["Next Recommended Step"])
-	b.WriteString("\n\n")
-
-	b.WriteString("=== SURVEY ===\n\n")
-
-	b.WriteString("QUESTIONS:\n")
-	b.WriteString(handoff["Unresolved Questions"])
-	b.WriteString("\n\n")
-
-	b.WriteString("ASSUMPTIONS:\n")
-	b.WriteString(handoff["Assumptions To Validate"])
-	b.WriteString("\n\n")
-
-	b.WriteString("MISSING:\n")
-	b.WriteString(handoff["Missing Context"])
-	b.WriteString("\n\n")
-
-	b.WriteString("=== PROMPT ===\n")
-	b.WriteString(`Continue the task using the context above.
-
-Rules:
-- do not repeat known context
-- respect locked decisions
-- validate assumptions before acting
-- proceed from the next step
-
-If something is unclear:
-- use questions and missing context sections
+	b.WriteString("=== INSTRUCTIONS ===\n\n")
+	b.WriteString(`Continue this task.
+- Do not repeat known context
+- Respect locked decisions
+- Validate assumptions before acting
+- Start from the next step
+- Ask if context is unclear
 `)
 
 	return b.String()

@@ -1,0 +1,21 @@
+# Continuum — Agent Target Files
+#
+# One filename per line. Lines starting with # are ignored.
+# ctx agent install will inject the bootstrap into each file found
+# in the current working directory.
+#
+# Add any agent instruction file your tools use, e.g.:
+#   .cursorrules
+#   .cursor/rules
+#   .windsurfrules
+#   GEMINI.md
+#   COPILOT.md
+
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+agent.md
+.claude.md
+.agents.md
+.cursor/rules
+.github/copilot-instructions.md
