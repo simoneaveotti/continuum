@@ -40,7 +40,7 @@ Only needed when:
 
 Project metadata stored in:
 ```
-.continuum/projects/<project-name>/
+.ctx/projects/<project-name>/
 ├── project.md    # project context
 └── tasks/        # task directory
 ```

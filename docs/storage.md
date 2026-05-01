@@ -1,6 +1,6 @@
 # Storage Patterns
 
-Continuum stores all state in a local directory (default: `~/.continuum/`).
+Continuum stores all state in a local directory (default: `~/.ctx/`).
 `CONTINUUM_PATH` overrides this location.
 
 Because each `CONTINUUM_PATH` is an independent storage instance with its own git repository, remote, and project set, you can run multiple isolated Continuum instances side by side with different sync policies and access rules.
@@ -47,7 +47,7 @@ Run a second Continuum instance in a different directory:
 ctx context --project=my-app
 
 # Sensitive project — local only
-CONTINUUM_PATH=~/.continuum-private ctx context --project=sensitive-project
+CONTINUUM_PATH=~/.ctx-private ctx context --project=sensitive-project
 ```
 
 The sensitive storage has no remote configured. Agents working there must be bootstrapped with the correct `CONTINUUM_PATH`.
@@ -59,9 +59,9 @@ Use when: regulated, healthcare, client-confidential, or otherwise non-syncable 
 Each storage instance can point to a different remote:
 
 ```text
-~/.continuum/          -> github.com/you/ctx-work
-~/.continuum-private/  -> gitea.yourserver.com/you/ctx-private
-~/.continuum-client/   -> github.com/you/ctx-client-x
+~/.ctx/          -> github.com/you/ctx-work
+~/.ctx-private/  -> gitea.yourserver.com/you/ctx-private
+~/.ctx-client/   -> github.com/you/ctx-client-x
 ```
 
 Each instance stays independent: different projects, different remotes, different sync rules.
@@ -73,15 +73,15 @@ Use when: multi-client consulting, residency separation, or strict project bound
 Common setup for employed developers or consultants:
 
 ```text
-~/.continuum/          -> company remote
-~/.continuum-personal/ -> personal remote
+~/.ctx/          -> company remote
+~/.ctx-personal/ -> personal remote
 ```
 
 You can switch automatically with project-specific shell config such as:
 
 ```bash
 # in .envrc for personal projects
-export CONTINUUM_PATH=~/.continuum-personal
+export CONTINUUM_PATH=~/.ctx-personal
 ```
 
 Use when: company and personal work must stay fully separate.
@@ -93,7 +93,7 @@ Continuum does not enforce access control between agents. Separation here is pat
 This is path-level isolation, not a cryptographic guarantee. For stronger local guarantees, keep sensitive storage unsynced and lock down directory permissions, for example:
 
 ```bash
-chmod 700 ~/.continuum-private
+chmod 700 ~/.ctx-private
 ```
 
 Agents working on sensitive storage should be bootstrapped with the correct `CONTINUUM_PATH` explicitly set in their environment or launcher.

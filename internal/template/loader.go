@@ -9,6 +9,7 @@ import (
 
 var basePath string
 var sourcePath string
+var executablePath = os.Executable
 
 func SetBasePath(path string) {
 	basePath = path
@@ -48,17 +49,25 @@ func userTemplatesDir() string {
 		if home == "" {
 			home = "."
 		}
-		basePath = filepath.Join(home, ".continuum")
+		basePath = filepath.Join(home, ".ctx")
 	}
 	return filepath.Join(basePath, "templates")
 }
 
 func repoTemplatesDir() string {
-	execPath, err := os.Executable()
+	execPath, err := executablePath()
 	if err != nil {
 		return "templates"
 	}
 	return filepath.Join(filepath.Dir(execPath), "templates")
+}
+
+func installedTemplatesDir() string {
+	execPath, err := executablePath()
+	if err != nil {
+		return ""
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(execPath), "..", "share", "continuum", "templates"))
 }
 
 func sourceTemplatesDir() string {
@@ -82,7 +91,7 @@ func templateSearchPaths(name string) []string {
 	if sourcePath != "" {
 		dirs = append(dirs, sourcePath)
 	} else {
-		dirs = append(dirs, repoTemplatesDir(), sourceTemplatesDir(), workingDirTemplatesDir())
+		dirs = append(dirs, installedTemplatesDir(), repoTemplatesDir(), sourceTemplatesDir(), workingDirTemplatesDir())
 	}
 
 	var paths []string
@@ -99,7 +108,7 @@ func initTemplateSearchPaths(name string) []string {
 	if sourcePath != "" {
 		dirs = append(dirs, sourcePath)
 	} else {
-		dirs = append(dirs, repoTemplatesDir(), sourceTemplatesDir(), workingDirTemplatesDir())
+		dirs = append(dirs, installedTemplatesDir(), repoTemplatesDir(), sourceTemplatesDir(), workingDirTemplatesDir())
 	}
 
 	var paths []string

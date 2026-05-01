@@ -4,6 +4,8 @@ set -euo pipefail
 REPO="simoneaveotti/continuum"
 BINARY="ctx"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+INSTALL_PREFIX="$(cd "${INSTALL_DIR}/.." && pwd)"
+TEMPLATES_DIR="${INSTALL_PREFIX}/share/continuum/templates"
 
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
@@ -44,6 +46,11 @@ else
 fi
 
 install -m 755 "$TMP/$BINARY" "$INSTALL_DIR/$BINARY"
+
+if [[ -d "$TMP/templates" ]]; then
+  mkdir -p "$TEMPLATES_DIR"
+  cp -R "$TMP/templates/." "$TEMPLATES_DIR/"
+fi
 
 if command -v xattr >/dev/null 2>&1; then
   xattr -c "$INSTALL_DIR/$BINARY" 2>/dev/null || true

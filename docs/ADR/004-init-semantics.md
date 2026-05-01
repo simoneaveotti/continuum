@@ -24,7 +24,7 @@ ctx init <project-name>
 
 Creates global context:
 ```
-.continuum/
+.ctx/
 ├── profile.md          # user preferences
 ├── notes.md            # user notes (optional)
 ├── skills/
@@ -37,7 +37,7 @@ Creates global context:
 
 Creates project context:
 ```
-.continuum/projects/<project>/
+.ctx/projects/<project>/
 ├── project.md          # project context
 └── tasks/              # task directory
 ```

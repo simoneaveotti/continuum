@@ -8,7 +8,7 @@ Continuum instructions are an execution protocol, not background context.
 Follow the states below in order, even for simple requests.
 
 Continuum storage lives outside this workspace.
-The default location is `~/.continuum/`, but it may be overridden with `CONTINUUM_PATH`.
+The default location is `~/.ctx/`, but it may be overridden with `CONTINUUM_PATH`.
 You must treat `ctx` as the only bridge to that storage.
 Do not read from or write to Continuum storage directly.
 

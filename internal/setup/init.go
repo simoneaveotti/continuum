@@ -23,9 +23,9 @@ func ContinuumPath() string {
 	}
 	if home == "" {
 		cwd, _ := os.Getwd()
-		return filepath.Join(cwd, ".continuum")
+		return filepath.Join(cwd, ".ctx")
 	}
-	return filepath.Join(home, ".continuum")
+	return filepath.Join(home, ".ctx")
 }
 
 func ResolvePath(parts ...string) string {
@@ -154,7 +154,7 @@ func Init(projectName string, force bool) error {
 	PushBestEffort()
 
 	fmt.Printf("Continuum initialized for project '%s'\n", projectName)
-	fmt.Println("Templates: .continuum/templates/")
+	fmt.Println("Templates: .ctx/templates/")
 	fmt.Println("Edit these files to customize defaults.")
 	return nil
 }
@@ -185,7 +185,7 @@ func InitSession(force bool) error {
 	PushBestEffort()
 
 	fmt.Println("Session initialized.")
-	fmt.Println("Templates: .continuum/templates/")
+	fmt.Println("Templates: .ctx/templates/")
 	fmt.Println("Run 'ctx project init <project>' to add a project.")
 	return nil
 }

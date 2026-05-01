@@ -272,3 +272,34 @@ func TestInitTemplates_ForceUsesExplicitSourceInsteadOfExistingUserTemplates(t *
 		t.Fatalf("expected explicit source to overwrite user template, got %q", string(data))
 	}
 }
+
+func TestFindTemplate_UsesInstalledSharePath(t *testing.T) {
+	dir := t.TempDir()
+	SetBasePath(filepath.Join(dir, "continuum"))
+	SetSourcePath("")
+	oldExecutablePath := executablePath
+	executablePath = func() (string, error) {
+		return filepath.Join(dir, "prefix", "bin", "ctx"), nil
+	}
+	t.Cleanup(func() {
+		SetBasePath("")
+		SetSourcePath("")
+		executablePath = oldExecutablePath
+	})
+
+	shareDir := filepath.Join(dir, "prefix", "share", "continuum", "templates")
+	if err := os.MkdirAll(shareDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(shareDir, "profile.md"), []byte("from-installed-share"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := findTemplate("profile.md")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(data) != "from-installed-share" {
+		t.Fatalf("expected installed share content, got %q", string(data))
+	}
+}

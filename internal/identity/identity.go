@@ -92,7 +92,7 @@ func continuumPath() string {
 	}
 	if home == "" {
 		cwd, _ := os.Getwd()
-		return filepath.Join(cwd, ".continuum")
+		return filepath.Join(cwd, ".ctx")
 	}
-	return filepath.Join(home, ".continuum")
+	return filepath.Join(home, ".ctx")
 }

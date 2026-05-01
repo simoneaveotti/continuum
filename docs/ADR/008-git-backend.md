@@ -6,16 +6,16 @@ Accepted
 
 ## Context
 
-Continuum persists all agent data under `~/.continuum/`, but the platform must stay local-first, append-only, and privacy-aware. Multiple agents may work on the same task concurrently and different machines must eventually see the same history. Prior discussions outlined an append-only storage model plus discrete commands; we need an architecture decision that makes git an internal transport without surfacing git to the user.
+Continuum persists all agent data under `~/.ctx/`, but the platform must stay local-first, append-only, and privacy-aware. Multiple agents may work on the same task concurrently and different machines must eventually see the same history. Prior discussions outlined an append-only storage model plus discrete commands; we need an architecture decision that makes git an internal transport without surfacing git to the user.
 
 ## Decision
 
-- Treat `~/.continuum/` itself as a hidden git repository. The repository stays append-only: every `ctx capture`, `ctx handoff`, and `ctx snapshot refresh` writes a timestamped file (`snapshot.<RFC3339>.<uuid-6>.md`, `handoff.<...>.md`), commits that file, and pushes to `origin/main` in a best-effort fashion.
+- Treat `~/.ctx/` itself as a hidden git repository. The repository stays append-only: every `ctx capture`, `ctx handoff`, and `ctx snapshot refresh` writes a timestamped file (`snapshot.<RFC3339>.<uuid-6>.md`, `handoff.<...>.md`), commits that file, and pushes to `origin/main` in a best-effort fashion.
 - `ctx init` bootstraps git plus `.gitignore`, seeds an initial commit, and optionally clones a remote via `--remote=<url>` when the storage directory is empty. `ctx init <project>` commits the new project file as `init(<project>): project initialized`.
 - `ctx sync [--remote=<url>]` orchestrates the read/write boundary: it adds the remote if requested, bootstraps `origin/main` with the first push when the remote is empty, otherwise runs `git pull --rebase origin main` followed by `git push origin main`, clears a `local/unsynced` marker on success, logs failures in `local/git.log` (rotated at ~1 MiB), and prints the latest log line for visibility. Failed pushes append the HEAD hash to `local/unsynced`.
 - `ctx context` always attempts a pull before loading state; it warns (non-blocking) if the pull fails and reports the number of unsynced commits so agents know whether their work is still local.
 - Additional commands enforce recovery and cleanup:
-  * `ctx repair` runs `git fsck`, aborts in-progress merge/rebase operations, and, on corruption, copies the whole `~/.continuum/` into a timestamped backup before instructing the user to clone the remote.
+  * `ctx repair` runs `git fsck`, aborts in-progress merge/rebase operations, and, on corruption, copies the whole `~/.ctx/` into a timestamped backup before instructing the user to clone the remote.
   * `ctx snapshot clean <task> [--keep=N]` retains only the newest `N` snapshots for a task, stages and commits the deletions, and never touches handoff files.
   * `ctx task delete <task>` / `ctx project delete <project>` remove the directory, stage the deletions, and commit them so git history reflects the change.
 - The git command wrapper (`internal/vcs`) exposes only the narrow operations Continuum needs (`init`, `clone`, `commit`, `push`, `pull`, `fsck`, `abort`, plus helpers like `RevListCount`, `RemoteURL`, `HeadCommit`, `Execute`). Errors are wrapped and logged without leaking git stack traces.
@@ -34,7 +34,7 @@ The current model now includes a storage-level `ctx resume` command as the opini
 Expected semantics:
 
 - operate at storage scope, not project scope
-- validate that `~/.continuum/` is a usable git repository
+- validate that `~/.ctx/` is a usable git repository
 - detect and repair in-progress merge/rebase state when safe
 - stop with a clear diagnosis if the working tree is dirty
 - run the equivalent of `ctx sync` when the repository is clean

@@ -42,6 +42,7 @@ archives:
       - LICENSE
       - README.md
       - install.sh
+      - templates
 
 checksum:
   name_template: "ctx_{{ .Version }}_checksums.txt"
@@ -72,5 +73,6 @@ brews:
     license: "MIT"
     install: |
       bin.install "ctx"
+      pkgshare.install "templates"
     test: |
       system "#{bin}/ctx", "--version"

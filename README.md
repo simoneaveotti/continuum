@@ -35,9 +35,9 @@ Three commands worth distinguishing:
 
 ## Important Constraint
 
-Continuum stores state outside the workspace (default: `~/.continuum/`).
+Continuum stores state outside the workspace (default: `~/.ctx/`).
 
-- agents should not read or write `~/.continuum/` directly
+- agents should not read or write `~/.ctx/` directly
 - agents should retrieve context with `ctx context`
 - agents should persist updates with `ctx capture`
 - `ctx` is the only supported bridge between the workspace and Continuum storage
@@ -235,7 +235,7 @@ For export encryption, see [docs/encryption.md](docs/encryption.md).
 ## Storage Model
 
 ```text
-~/.continuum/
+~/.ctx/
 ├── profile.md
 ├── agent-targets.txt
 ├── skills/

@@ -9,7 +9,7 @@ Accepted
 Continuum must work with any coding agent, but agents:
 
 - Cannot reliably access files outside their current workspace
-- Cannot discover hidden directories like `.continuum/`
+- Cannot discover hidden directories like `.ctx/`
 - May not support external tools (CLI, MCP, etc.)
 - May be local models (Ollama, etc.)
 
@@ -93,7 +93,7 @@ Rules:
 ### 3. No Global Dependencies
 
 The system does NOT rely on:
-- Global configuration paths (`~/.continuum`)
+- Global configuration paths (`~/.ctx`)
 - Automatic file discovery
 - Implicit behavior
 
@@ -102,7 +102,7 @@ The system does NOT rely on:
 When starting work, the agent instruction file must direct the agent to retrieve context itself via:
 - `ctx context --project=<project>`
 
-The bootstrap must assume the agent can run shell commands in the workspace, but cannot directly read or write `~/.continuum/`.
+The bootstrap must assume the agent can run shell commands in the workspace, but cannot directly read or write `~/.ctx/`.
 
 ### 5. Persistence Model
 

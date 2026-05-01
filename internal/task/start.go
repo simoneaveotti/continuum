@@ -87,6 +87,6 @@ func Start(task, project string) (StartResult, error) {
 	}
 	setup.PushBestEffort()
 
-	fmt.Printf("Task '%s' initialized in .continuum/projects/%s/tasks/%s\n", task, project, task)
+	fmt.Printf("Task '%s' initialized in .ctx/projects/%s/tasks/%s\n", task, project, task)
 	return StartCreated, nil
 }

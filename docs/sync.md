@@ -11,8 +11,8 @@ This assumes the remote repository already exists and is dedicated to Continuum 
 ```bash
 # create a dedicated private git repository for Continuum storage first
 ctx init --remote=git@github.com:you/continuum-state.git
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.name "Your Name"
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.email "you@example.com"
+git -C "${CONTINUUM_PATH:-$HOME/.ctx}" config user.name "Your Name"
+git -C "${CONTINUUM_PATH:-$HOME/.ctx}" config user.email "you@example.com"
 ctx resume
 ctx context --project=my-project
 ```
@@ -20,19 +20,19 @@ ctx context --project=my-project
 If your Continuum storage exists only on the old machine:
 
 ```bash
-# copy ${CONTINUUM_PATH:-$HOME/.continuum} from the old machine to the new one
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.name "Your Name"
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.email "you@example.com"
+# copy ${CONTINUUM_PATH:-$HOME/.ctx} from the old machine to the new one
+git -C "${CONTINUUM_PATH:-$HOME/.ctx}" config user.name "Your Name"
+git -C "${CONTINUUM_PATH:-$HOME/.ctx}" config user.email "you@example.com"
 ctx resume
 ctx context --project=my-project
 ```
 
 Notes:
 
-- `ctx init` uses `~/.continuum/` by default
+- `ctx init` uses `~/.ctx/` by default
 - set `CONTINUUM_PATH` if this machine should use a different storage location
 - use a dedicated git repository for Continuum storage, not your application repository
-- if you use different git identities for different storage instances, prefer repo-local config with `git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config ...` instead of `--global`
+- if you use different git identities for different storage instances, prefer repo-local config with `git -C "${CONTINUUM_PATH:-$HOME/.ctx}" config ...` instead of `--global`
 - git-backed storage requires `git user.name` and `git user.email` before `ctx resume`, `ctx capture`, or `ctx sync`
 - `ctx resume` should be the first command at the start of a session on an existing storage
 - `ctx sync` is still valid when you only want to pull/push storage state; `ctx resume` wraps health checks, safe repair, sync, and global orientation
@@ -41,14 +41,14 @@ Notes:
 
 ## Git Sync & Recovery
 
-Continuum keeps `~/.continuum/` inside a git repo. Use `ctx sync` to pull/push with a remote, and `ctx repair` when git detects corruption.
+Continuum keeps `~/.ctx/` inside a git repo. Use `ctx sync` to pull/push with a remote, and `ctx repair` when git detects corruption.
 
 Before using git-backed writes, ensure git identity is configured for Continuum commits.
 If you use different identities for different Continuum storage instances, prefer repo-local configuration on the active Continuum storage path:
 
 ```bash
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.name "Your Name"
-git -C "${CONTINUUM_PATH:-$HOME/.continuum}" config user.email "you@example.com"
+git -C "${CONTINUUM_PATH:-$HOME/.ctx}" config user.name "Your Name"
+git -C "${CONTINUUM_PATH:-$HOME/.ctx}" config user.email "you@example.com"
 ```
 
 Use `--global` only if this machine should use the same git identity for every Continuum storage instance.
@@ -62,10 +62,10 @@ ctx config set host workstation-rome
 For temporary overrides in CI or scripted environments, `CONTINUUM_HOST` takes precedence over the saved local value.
 
 - `ctx sync [--remote=<url>]` runs `git pull --rebase origin main` and `git push origin main`, adds the remote when `--remote` is provided, and bootstraps `origin/main` on the first sync if the remote is still empty
-- failed pushes mark the commit hash in `~/.continuum/local/unsynced`
+- failed pushes mark the commit hash in `~/.ctx/local/unsynced`
 - `ctx repair` runs `git fsck`, aborts in-progress merge/rebase state, and can create a backup before suggesting a remote restore path
 - `ctx repair --activity` deduplicates and normalizes `events/activity.ndjson` when the shared activity log accumulates duplicate or malformed lines
-- `ctx init --remote=<url>` clones a fresh Continuum repo when `~/.continuum/` is empty
+- `ctx init --remote=<url>` clones a fresh Continuum repo when `~/.ctx/` is empty
 
 Recommended start-of-session flow:
 

@@ -25,6 +25,16 @@ func TestContinuumPath_EnvVar(t *testing.T) {
 	}
 }
 
+func TestContinuumPath_DefaultsToCtx(t *testing.T) {
+	t.Setenv("CONTINUUM_PATH", "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", "")
+	if got := ContinuumPath(); got != filepath.Join(home, ".ctx") {
+		t.Errorf("ContinuumPath() = %q, want %q", got, filepath.Join(home, ".ctx"))
+	}
+}
+
 func TestValidateProjectName(t *testing.T) {
 	valid := []string{"continuum", "my-project", "proj_1", "demo.v2"}
 	for _, name := range valid {

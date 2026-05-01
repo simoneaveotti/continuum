@@ -16,10 +16,10 @@ The user interacts naturally. The system stores silently.
 
 ## Decision
 
-`.continuum` is stored in a **global/shared location**, outside any project directory.
+`.ctx` is stored in a **global/shared location**, outside any project directory.
 
 ```
-~/.continuum/              # or CONTINUUM_PATH env var
+~/.ctx/              # or CONTINUUM_PATH env var
 ├── profile.md            # global user profile
 ├── notes.md              # global notes
 ├── skills/

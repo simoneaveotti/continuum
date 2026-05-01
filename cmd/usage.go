@@ -95,7 +95,7 @@ func printUsage() {
 	})
 
 	printUsageSection("Environment", [][2]string{
-		{"CONTINUUM_PATH", "Continuum storage location (default: ~/.continuum)"},
+		{"CONTINUUM_PATH", "Continuum storage location (default: ~/.ctx)"},
 		{"CONTINUUM_HOST", "override machine identity for events and commit metadata"},
 	})
 
