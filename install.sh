@@ -25,6 +25,7 @@ if [[ -z "$VERSION" ]]; then
   echo "Unable to determine latest release version" >&2
   exit 1
 fi
+ASSET_VERSION="${VERSION#v}"
 
 ARCHIVE_EXT="tar.gz"
 if [[ "$OS" == "mingw"* || "$OS" == "msys"* || "$OS" == "cygwin"* ]]; then
@@ -32,7 +33,7 @@ if [[ "$OS" == "mingw"* || "$OS" == "msys"* || "$OS" == "cygwin"* ]]; then
   ARCHIVE_EXT="zip"
 fi
 
-URL="https://github.com/${REPO}/releases/download/${VERSION}/ctx_${VERSION}_${OS}_${ARCH}.${ARCHIVE_EXT}"
+URL="https://github.com/${REPO}/releases/download/${VERSION}/ctx_${ASSET_VERSION}_${OS}_${ARCH}.${ARCHIVE_EXT}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
