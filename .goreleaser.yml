@@ -52,12 +52,21 @@ release:
   prerelease: auto
   name_template: "{{ .Version }}"
 
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
 brews:
   - name: continuum
+    skip_upload: "{{ if index .Env \"HOMEBREW_TAP_TOKEN\" }}false{{ else }}true{{ end }}"
     repository:
       owner: simoneaveotti
       name: homebrew-continuum
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      token: "{{ index .Env \"HOMEBREW_TAP_TOKEN\" }}"
     homepage: "https://github.com/simoneaveotti/continuum"
     description: "Terminal-first context orchestration for AI-assisted development."
     license: "MIT"

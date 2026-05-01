@@ -67,6 +67,12 @@ func TestDeleteTaskRemovesDirectory(t *testing.T) {
 	if out, err := exec.Command("git", "-C", base, "add", "--", filepath.Join("projects", "proj", "tasks", "my-task", "notes.md")).CombinedOutput(); err != nil {
 		t.Fatalf("git add tracked note failed: %v\n%s", err, out)
 	}
+	if out, err := exec.Command("git", "-C", base, "config", "user.email", "test@test.com").CombinedOutput(); err != nil {
+		t.Fatalf("git config user.email failed: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", base, "config", "user.name", "Test").CombinedOutput(); err != nil {
+		t.Fatalf("git config user.name failed: %v\n%s", err, out)
+	}
 	if out, err := exec.Command("git", "-C", base, "commit", "-m", "track task note").CombinedOutput(); err != nil {
 		t.Fatalf("git commit tracked note failed: %v\n%s", err, out)
 	}
