@@ -44,18 +44,26 @@ Continuum stores state outside the workspace (default: `~/.ctx/`).
 
 ## Installation
 
+Use the installer script:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/simoneaveotti/continuum/main/install.sh | bash
-
-go build -o ctx ./cmd/
-sudo cp ctx /usr/local/bin/
-xattr -c /usr/local/bin/ctx 2>/dev/null || true
 ```
 
-The installer uses `~/.local/bin` by default. For a system-wide install:
+This installs `ctx` to `~/.local/bin` by default.
+
+For a system-wide install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/simoneaveotti/continuum/main/install.sh | sudo env INSTALL_DIR=/usr/local/bin bash
+```
+
+Or build from source manually:
+
+```bash
+go build -o ctx ./cmd/
+sudo cp ctx /usr/local/bin/
+xattr -c /usr/local/bin/ctx 2>/dev/null || true
 ```
 
 For release automation, Homebrew tap, and distribution details, see [docs/RELEASING.md](docs/RELEASING.md).
