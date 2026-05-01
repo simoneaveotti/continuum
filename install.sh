@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO="simoneaveotti/continuum"
 BINARY="ctx"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 INSTALL_PREFIX="$(cd "${INSTALL_DIR}/.." && pwd)"
 TEMPLATES_DIR="${INSTALL_PREFIX}/share/continuum/templates"
 
@@ -46,6 +46,7 @@ else
   tar -xzf "$TMP/archive.$ARCHIVE_EXT" -C "$TMP"
 fi
 
+mkdir -p "$INSTALL_DIR"
 install -m 755 "$TMP/$BINARY" "$INSTALL_DIR/$BINARY"
 
 if [[ -d "$TMP/templates" ]]; then
@@ -58,3 +59,9 @@ if command -v xattr >/dev/null 2>&1; then
 fi
 
 echo "ctx ${VERSION} installed to ${INSTALL_DIR}/${BINARY}"
+case ":${PATH}:" in
+  *":${INSTALL_DIR}:"*) ;;
+  *)
+    echo "Add ${INSTALL_DIR} to your PATH to run ctx directly."
+    ;;
+esac
