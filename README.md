@@ -27,7 +27,7 @@ Continuum separates three concerns:
 
 There is no automatic discovery. The agent must be explicitly bootstrapped.
 
-Two commands worth distinguishing:
+Three commands worth distinguishing:
 
     ctx resume    — for the user: validates storage health, syncs, and orients
     ctx sync      — for the user: pull/push storage state without health checks
@@ -272,15 +272,8 @@ For export encryption, see [docs/encryption.md](docs/encryption.md).
 
 ## Built with Continuum
 
-Continuum was built using itself — across multiple machines, five different
-coding agents, and dozens of sessions.
-
-The full development history is available as an importable snapshot:
-
-```bash
-ctx import https://github.com/simoneaveotti/continuum/releases/latest/download/continuum-history.zip
-ctx history --project=continuum
-```
+Continuum was built using itself — across multiple machines, multiple coding
+agents, nine real projects, and dozens of sessions.
 
 ## Summary
 
