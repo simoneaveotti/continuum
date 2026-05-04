@@ -259,7 +259,7 @@ func SyncWithOptions(options SyncOptions) (SyncResult, error) {
 		_ = ClearUnsynced()
 		if err := events.Append("", "", "sync", "ok", fmt.Sprintf("pull=%d push=%d", result.PullCount, result.PushCount)); err == nil {
 			_ = StagePaths([]string{events.ActivityRelPath()})
-			_ = CommitFiles("chore: sync activity stream updated", []string{events.ActivityRelPath()})
+			_ = CommitFiles("sync: activity stream updated", []string{events.ActivityRelPath()})
 		}
 		result.LogEntry = newLogEntrySince(beforeLog)
 		return result, nil
@@ -282,7 +282,7 @@ func SyncWithOptions(options SyncOptions) (SyncResult, error) {
 		_ = ClearUnsynced()
 		if err := events.Append("", "", "sync", "ok", fmt.Sprintf("pull=%d push=%d", result.PullCount, result.PushCount)); err == nil {
 			_ = StagePaths([]string{events.ActivityRelPath()})
-			_ = CommitFiles("chore: sync activity stream updated", []string{events.ActivityRelPath()})
+			_ = CommitFiles("sync: activity stream updated", []string{events.ActivityRelPath()})
 		}
 		result.LogEntry = newLogEntrySince(beforeLog)
 		return result, nil
@@ -322,7 +322,7 @@ func SyncWithOptions(options SyncOptions) (SyncResult, error) {
 	_ = ClearUnsynced()
 	if err := events.Append("", "", "sync", "ok", fmt.Sprintf("pull=%d push=%d", result.PullCount, result.PushCount)); err == nil {
 		_ = StagePaths([]string{events.ActivityRelPath()})
-		_ = CommitFiles("chore: sync activity stream updated", []string{events.ActivityRelPath()})
+		_ = CommitFiles("sync: activity stream updated", []string{events.ActivityRelPath()})
 	}
 	result.LogEntry = newLogEntrySince(beforeLog)
 	return result, nil
