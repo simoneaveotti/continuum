@@ -260,6 +260,21 @@ func parseAgentInstallArgs(args []string) (projectName string, force bool) {
 	return projectName, force
 }
 
+func parseAgentProjectArgs(args []string) (projectName string, force bool, err error) {
+	for _, arg := range args {
+		if val, ok := parseFlag(arg, "--project="); ok {
+			projectName = val
+			continue
+		}
+		if arg == "--force" {
+			force = true
+			continue
+		}
+		return "", false, fmt.Errorf("Usage: ctx agent status [--project=<name>]\n       ctx agent update [--project=<name>] [--force]")
+	}
+	return projectName, force, nil
+}
+
 func parseConfigSetArgs(args []string) (key, value string, err error) {
 	if len(args) != 2 {
 		return "", "", fmt.Errorf("Usage: ctx config set host <name>")

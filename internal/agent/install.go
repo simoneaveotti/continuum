@@ -13,7 +13,16 @@ import (
 const (
 	MarkerStart = "<!-- CONTINUUM:START -->"
 	MarkerEnd   = "<!-- CONTINUUM:END -->"
+	VersionKey  = "CONTINUUM:BOOTSTRAP_VERSION"
 )
+
+type BootstrapCheck struct {
+	File             string
+	Status           string
+	InstalledVersion string
+	CurrentVersion   string
+	Detail           string
+}
 
 func loadTargetFiles() ([]string, error) {
 	path := setup.ResolvePath("agent-targets.txt")
@@ -70,6 +79,114 @@ func Install(project string, force bool) error {
 	_ = events.Append(project, "", "agent_install", "ok", fmt.Sprintf("%d file(s)", installed))
 	fmt.Printf("Installed Continuum bootstrap (project: %s) to %d file(s).\n", project, installed)
 	return nil
+}
+
+func Status(project string) ([]BootstrapCheck, error) {
+	if err := setup.ValidateProjectName(project); err != nil {
+		return nil, err
+	}
+
+	targetFiles, err := loadTargetFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	checks := make([]BootstrapCheck, 0, len(targetFiles))
+	for _, filename := range targetFiles {
+		checks = append(checks, checkFile(filename))
+	}
+	return checks, nil
+}
+
+func Update(project string, force bool) error {
+	if err := setup.ValidateProjectName(project); err != nil {
+		return err
+	}
+	checks, err := Status(project)
+	if err != nil {
+		return err
+	}
+	if !force && !needsUpdate(checks) {
+		fmt.Println("Agent bootstrap already current.")
+		return nil
+	}
+	if err := setup.InitSession(true); err != nil {
+		return err
+	}
+	return Install(project, true)
+}
+
+func needsUpdate(checks []BootstrapCheck) bool {
+	for _, check := range checks {
+		if check.Status == "stale" || check.Status == "unknown" {
+			return true
+		}
+	}
+	return false
+}
+
+func checkFile(filename string) BootstrapCheck {
+	check := BootstrapCheck{
+		File:           filename,
+		CurrentVersion: template.BootstrapVersion,
+	}
+
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			check.Status = "missing"
+			check.Detail = "file not found"
+			return check
+		}
+		check.Status = "unknown"
+		check.Detail = err.Error()
+		return check
+	}
+
+	block, ok := extractBootstrapBlock(string(content))
+	if !ok {
+		check.Status = "missing"
+		check.Detail = "no Continuum bootstrap block"
+		return check
+	}
+
+	check.InstalledVersion = extractBootstrapVersion(block)
+	if check.InstalledVersion == "" {
+		check.Status = "unknown"
+		check.Detail = "bootstrap version marker missing"
+		return check
+	}
+	if check.InstalledVersion == template.BootstrapVersion {
+		check.Status = "ok"
+		return check
+	}
+	check.Status = "stale"
+	return check
+}
+
+func extractBootstrapBlock(content string) (string, bool) {
+	start := strings.Index(content, MarkerStart)
+	end := strings.Index(content, MarkerEnd)
+	if start == -1 || end == -1 || end <= start {
+		return "", false
+	}
+	end += len(MarkerEnd)
+	return content[start:end], true
+}
+
+func extractBootstrapVersion(block string) string {
+	for _, line := range strings.Split(block, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, VersionKey) {
+			continue
+		}
+		line = strings.TrimPrefix(line, "<!--")
+		line = strings.TrimSuffix(line, "-->")
+		line = strings.TrimSpace(line)
+		line = strings.TrimPrefix(line, VersionKey)
+		return strings.TrimSpace(line)
+	}
+	return ""
 }
 
 func installToFile(filename, project string, force bool) error {

@@ -92,7 +92,23 @@ ctx init --force
 ctx agent install --project=my-project --force
 ```
 
+To check or refresh installed bootstrap instructions later:
+
+```bash
+ctx agent status --project=my-project
+ctx agent update --project=my-project
+```
+
+If the current directory maps unambiguously to a Continuum project, `--project` may be omitted.
+`ctx agent update` is idempotent: it only rewrites stale or unknown installed bootstrap blocks unless `--force` is passed.
+
 ### 3. Load Context
+
+Before starting a new session on existing storage, run:
+
+```bash
+ctx resume
+```
 
 When an agent starts, it should read the injected bootstrap instructions and load context through `ctx`:
 
@@ -108,7 +124,7 @@ Use:
 - `ctx context <task> --project=my-project` when the compact digest is not enough and you need the full context
 - `ctx task start my-task --project=my-project` to create a task inside that project
 
-`--compact` is the recommended agent bootstrap path. It keeps the same authoritative state but omits empty fields and compresses labels such as `PROJECT`, `CURRENT STATE`, and `NEXT STEP` into short keys like `PRJ`, `STATE`, and `NEXT`. The full context remains available on demand.
+`--compact` is the default for agent bootstrap. Use full context only when needed.
 
 ### 4. Persist Progress
 
@@ -127,6 +143,9 @@ ctx capture my-task --project=my-project <<'EOF'
 
 ## Current State
 - <what is done or in progress>
+
+## Decisions (Locked)
+- <why choices were made>
 
 ## Next Step
 - <immediate next action>
@@ -168,6 +187,9 @@ ctx capture my-task --project=my-project --yes <<'EOF'
 ## Current State
 - <what is done or in progress>
 
+## Decisions (Locked)
+- <why choices were made>
+
 ## Next Step
 - <immediate next action>
 
@@ -197,6 +219,8 @@ For export encryption, see [docs/encryption.md](docs/encryption.md).
 - `ctx project delete <project>`
 - `ctx config set host <name>`
 - `ctx agent install --project=<name>`
+- `ctx agent status [--project=<name>]`
+- `ctx agent update [--project=<name>] [--force]`
 - `ctx agent remove [--project=<name>]`
 
 ### Context

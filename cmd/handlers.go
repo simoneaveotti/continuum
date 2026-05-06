@@ -38,6 +38,17 @@ func resolveProject(project string) string {
 	return detected
 }
 
+func resolveAgentProject(command, project string) string {
+	if project != "" {
+		return project
+	}
+	detected, err := setup.DetectProject()
+	if err != nil {
+		die(fmt.Errorf("project not specified and no local project is configured.\nRun:\n  ctx agent %s --project=<name>", command))
+	}
+	return detected
+}
+
 func handleInit(args []string) {
 	projectName, templatesPath, force, remote := parseInitArgs(args)
 	if templatesPath != "" {
@@ -433,6 +444,8 @@ func handleDiff(args []string) {
 func handleAgent(args []string) {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "Usage: ctx agent install --project=<name> [--force]")
+		fmt.Fprintln(os.Stderr, "       ctx agent status [--project=<name>]")
+		fmt.Fprintln(os.Stderr, "       ctx agent update [--project=<name>]")
 		fmt.Fprintln(os.Stderr, "       ctx agent remove [--project=<name>]")
 		os.Exit(1)
 	}
@@ -445,6 +458,26 @@ func handleAgent(args []string) {
 			os.Exit(1)
 		}
 		if err := agent.Install(projectName, force); err != nil {
+			die(err)
+		}
+	case "status":
+		projectName, _, err := parseAgentProjectArgs(args[1:])
+		if err != nil {
+			die(err)
+		}
+		projectName = resolveAgentProject("status", projectName)
+		checks, err := agent.Status(projectName)
+		if err != nil {
+			die(err)
+		}
+		printAgentStatus(checks)
+	case "update":
+		projectName, force, err := parseAgentProjectArgs(args[1:])
+		if err != nil {
+			die(err)
+		}
+		projectName = resolveAgentProject("update", projectName)
+		if err := agent.Update(projectName, force); err != nil {
 			die(err)
 		}
 	case "remove":
@@ -461,8 +494,33 @@ func handleAgent(args []string) {
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown agent command.")
 		fmt.Fprintln(os.Stderr, "Usage: ctx agent install --project=<name> [--force]")
+		fmt.Fprintln(os.Stderr, "       ctx agent status [--project=<name>]")
+		fmt.Fprintln(os.Stderr, "       ctx agent update [--project=<name>]")
 		fmt.Fprintln(os.Stderr, "       ctx agent remove [--project=<name>]")
 		os.Exit(1)
+	}
+}
+
+func printAgentStatus(checks []agent.BootstrapCheck) {
+	for _, check := range checks {
+		installed := check.InstalledVersion
+		if installed == "" {
+			installed = "unknown"
+		}
+		current := check.CurrentVersion
+		if current == "" {
+			current = "unknown"
+		}
+		switch check.Status {
+		case "ok":
+			fmt.Printf("%s: installed bootstrap %s, current %s (ok)\n", check.File, installed, current)
+		case "stale":
+			fmt.Printf("%s: installed bootstrap %s, current %s (stale)\n", check.File, installed, current)
+		case "missing":
+			fmt.Printf("%s: missing (%s)\n", check.File, check.Detail)
+		default:
+			fmt.Printf("%s: unknown (%s)\n", check.File, check.Detail)
+		}
 	}
 }
 

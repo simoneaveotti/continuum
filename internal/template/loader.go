@@ -11,6 +11,8 @@ var basePath string
 var sourcePath string
 var executablePath = os.Executable
 
+const BootstrapVersion = "2026-05-06.1"
+
 func SetBasePath(path string) {
 	basePath = path
 }
@@ -155,7 +157,7 @@ func GetBootstrap(project string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return fmt.Appendf(nil, string(data), project), nil
+	return fmt.Appendf(nil, string(data), project, BootstrapVersion), nil
 }
 
 func GetAgentSkill() ([]byte, error) {

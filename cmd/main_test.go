@@ -181,6 +181,51 @@ func TestParseAgentInstallArgs_ProjectFlagOnly(t *testing.T) {
 	}
 }
 
+func TestParseAgentProjectArgs(t *testing.T) {
+	project, force, err := parseAgentProjectArgs([]string{"--project=my-project"})
+	if err != nil {
+		t.Fatalf("parseAgentProjectArgs: %v", err)
+	}
+	if project != "my-project" {
+		t.Fatalf("expected project my-project, got %q", project)
+	}
+	if force {
+		t.Fatal("did not expect force")
+	}
+}
+
+func TestParseAgentProjectArgs_AllowsEmptyProject(t *testing.T) {
+	project, force, err := parseAgentProjectArgs(nil)
+	if err != nil {
+		t.Fatalf("parseAgentProjectArgs: %v", err)
+	}
+	if project != "" {
+		t.Fatalf("expected empty project, got %q", project)
+	}
+	if force {
+		t.Fatal("did not expect force")
+	}
+}
+
+func TestParseAgentProjectArgs_AllowsForce(t *testing.T) {
+	project, force, err := parseAgentProjectArgs([]string{"--project=my-project", "--force"})
+	if err != nil {
+		t.Fatalf("parseAgentProjectArgs: %v", err)
+	}
+	if project != "my-project" {
+		t.Fatalf("expected project my-project, got %q", project)
+	}
+	if !force {
+		t.Fatal("expected force")
+	}
+}
+
+func TestParseAgentProjectArgs_RejectsUnknownArg(t *testing.T) {
+	if _, _, err := parseAgentProjectArgs([]string{"unexpected"}); err == nil {
+		t.Fatal("expected usage error")
+	}
+}
+
 func TestParseProjectCommandArgs(t *testing.T) {
 	project, err := parseProjectCommandArgs([]string{"my-project"})
 	if err != nil {

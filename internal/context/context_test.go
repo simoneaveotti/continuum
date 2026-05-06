@@ -302,6 +302,9 @@ Build file explorer component for document navigation
 - FP table done
 - upload pending
 
+## Decisions (Locked)
+- Keep local-first storage because agents must work offline
+
 ## Next Step
 implement upload action in FP resource
 
@@ -321,7 +324,7 @@ permission policy unclear
 		"STATE:routing ok | FP table done",
 		"NEXT:implement upload action in FP resource",
 		"ISSUES:permission policy unclear",
-		"DECIDED:local-first storage | Spatie Shield RBAC",
+		"DECIDED:Keep local-first storage because agents must work offline | local-first storage | Spatie Shield RBAC",
 		"SRC:snapshot.20260325T143200Z.a3f2c1.md",
 	} {
 		if !strings.Contains(output, expected) {

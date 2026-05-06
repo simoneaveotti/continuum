@@ -1,5 +1,6 @@
 <!-- CONTINUUM:START -->
 <!-- do not remove or modify the %[1]s placeholders — they are replaced by ctx agent install -->
+<!-- CONTINUUM:BOOTSTRAP_VERSION %[2]s -->
 This workspace uses Continuum for agent continuity.
 
 Default Continuum project: %[1]s
@@ -61,6 +62,20 @@ Do not capture a new line of work until the correct task exists.
 If work clearly belongs to a different task, create or switch tasks autonomously.
 
 Do not ask the user to restate information already present in this context.
+
+---
+
+## Instruction Currency Check
+
+Check whether these installed Continuum instructions are current:
+
+    ctx agent status --project=%[1]s
+
+If the installed bootstrap is stale or unknown, tell the user to run:
+
+    ctx agent update --project=%[1]s
+
+Do not run `ctx agent update` autonomously unless the user explicitly asks.
 
 ---
 
@@ -127,7 +142,7 @@ When real progress has been made, compose the current state as markdown and pipe
 
 `ctx capture` defaults to `--type=state`. Use state captures only for the actual
 task state that should drive future `ctx context` output: objective, current state,
-next step, constraints, and active issues.
+decisions, next step, constraints, and active issues.
 
 Use typed captures for collaboration artifacts that should not replace task state:
 
@@ -147,6 +162,9 @@ State capture pattern:
 
     ## Current State
     - <what is done or in progress>
+
+    ## Decisions (Locked)
+    - <decision made and why>
 
     ## Next Step
     - <immediate next action>

@@ -45,6 +45,9 @@ Ship --yes support
 ## Current State
 - Parser updated
 
+## Decisions
+- Keep --yes non-interactive because agents need autonomous saves
+
 ## Next Step
 - Add tests
 
@@ -64,12 +67,43 @@ Ship --yes support
 	for _, want := range []string{
 		"Ship --yes support",
 		"- Parser updated",
+		"## Decisions (Locked)\n- Keep --yes non-interactive because agents need autonomous saves",
 		"- Add tests",
 		"- Keep CLI behavior stable",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected snapshot to contain %q\ncontent:\n%s", want, content)
 		}
+	}
+}
+
+func TestCapture_AcceptsCanonicalLockedDecisions(t *testing.T) {
+	base := withTempContinuum(t)
+	if _, err := Start("my-task", "my-project"); err != nil {
+		t.Fatalf("Start() error: %v", err)
+	}
+
+	useStdinFile(t, `## Objective
+Preserve canonical decisions
+
+## Current State
+- Capture accepts canonical heading
+
+## Decisions (Locked)
+- Keep the canonical snapshot heading stable because ctx context already reads it
+
+## Next Step
+- Verify compact context
+`)
+
+	if err := Capture("my-task", "my-project", filestore.StateCapture, true); err != nil {
+		t.Fatalf("Capture() error: %v", err)
+	}
+
+	taskDir := filepath.Join(base, "projects", "my-project", "tasks", "my-task")
+	content := readLatestFileInDir(t, taskDir, "snapshot.")
+	if !strings.Contains(content, "## Decisions (Locked)\n- Keep the canonical snapshot heading stable because ctx context already reads it") {
+		t.Fatalf("expected canonical decisions to survive\ncontent:\n%s", content)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 type CaptureData struct {
 	Objective   string
 	State       string
+	Decisions   string
 	Next        string
 	Constraints string
 	Issues      string
@@ -36,9 +37,14 @@ func isStdinPiped() bool {
 
 func parseCaptureFromMarkdown(content string) *CaptureData {
 	sections := parseSections(content)
+	decisions := sections["Decisions (Locked)"]
+	if strings.TrimSpace(decisions) == "" {
+		decisions = sections["Decisions"]
+	}
 	return &CaptureData{
 		Objective:   cleanPrefill(sections["Objective"]),
 		State:       cleanPrefill(sections["Current State"]),
+		Decisions:   cleanPrefill(decisions),
 		Next:        cleanPrefill(sections["Next Step"]),
 		Constraints: cleanPrefill(sections["Constraints"]),
 		Issues:      cleanPrefill(sections["Active Issues"]),
@@ -74,6 +80,9 @@ func BuildCaptureSummary(d *CaptureData) string {
 	}
 	if d.State != "" {
 		lines = append(lines, fmt.Sprintf("State: %s", d.State))
+	}
+	if d.Decisions != "" {
+		lines = append(lines, fmt.Sprintf("Decisions: %s", d.Decisions))
 	}
 	if d.Next != "" {
 		lines = append(lines, fmt.Sprintf("Next: %s", d.Next))
@@ -117,6 +126,9 @@ func saveSnapshot(task, project string, d *CaptureData) (string, error) {
 ## Current State
 - %s
 
+## Decisions (Locked)
+- %s
+
 ## Next Step
 - %s
 
@@ -132,6 +144,7 @@ func saveSnapshot(task, project string, d *CaptureData) (string, error) {
 		task, project,
 		d.Objective,
 		d.State,
+		d.Decisions,
 		d.Next,
 		d.Constraints,
 		d.Issues,

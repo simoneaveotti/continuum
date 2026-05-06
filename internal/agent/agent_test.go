@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"continuum/internal/events"
+	"continuum/internal/template"
 )
 
 func withTempContinuum(t *testing.T) string {
@@ -146,5 +147,67 @@ func TestInstallAndRemoveEmitActivityEvents(t *testing.T) {
 	}
 	if items[len(items)-2].Type != "agent_install" || items[len(items)-1].Type != "agent_remove" {
 		t.Fatalf("unexpected trailing events: %#v", items[len(items)-2:])
+	}
+}
+
+func TestStatusReportsOkStaleMissingAndUnknown(t *testing.T) {
+	base := withTempContinuum(t)
+	writeTargets(t, base, []string{"OK.md", "STALE.md", "MISSING.md", "UNKNOWN.md"})
+
+	dir := t.TempDir()
+	orig, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(orig)
+
+	okBlock := MarkerStart + "\n<!-- " + VersionKey + " " + template.BootstrapVersion + " -->\n" + MarkerEnd + "\n"
+	staleBlock := MarkerStart + "\n<!-- " + VersionKey + " 2000-01-01.1 -->\n" + MarkerEnd + "\n"
+	unknownBlock := MarkerStart + "\nbootstrap without version\n" + MarkerEnd + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "OK.md"), []byte(okBlock), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "STALE.md"), []byte(staleBlock), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "UNKNOWN.md"), []byte(unknownBlock), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	checks, err := Status("demo")
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+
+	got := map[string]string{}
+	for _, check := range checks {
+		got[check.File] = check.Status
+	}
+	for file, want := range map[string]string{
+		"OK.md":      "ok",
+		"STALE.md":   "stale",
+		"MISSING.md": "missing",
+		"UNKNOWN.md": "unknown",
+	} {
+		if got[file] != want {
+			t.Fatalf("%s status = %q, want %q; checks=%#v", file, got[file], want, checks)
+		}
+	}
+}
+
+func TestNeedsUpdateIgnoresOkAndMissing(t *testing.T) {
+	checks := []BootstrapCheck{
+		{File: "AGENTS.md", Status: "ok"},
+		{File: "CLAUDE.md", Status: "missing"},
+	}
+	if needsUpdate(checks) {
+		t.Fatal("missing target should not require update")
+	}
+}
+
+func TestNeedsUpdateDetectsStaleAndUnknown(t *testing.T) {
+	for _, status := range []string{"stale", "unknown"} {
+		checks := []BootstrapCheck{{File: "AGENTS.md", Status: status}}
+		if !needsUpdate(checks) {
+			t.Fatalf("expected %s to require update", status)
+		}
 	}
 }

@@ -37,6 +37,8 @@ func printUsage() {
 		{"ctx project delete <project>", "remove a project and commit the deletion"},
 		{"ctx config set host <name>", "persist a local machine identity for events and commit metadata"},
 		{"ctx agent install --project=<name> [--force]", "inject or re-inject bootstrap instructions into agent files"},
+		{"ctx agent status [--project=<name>]", "check whether installed bootstrap instructions are current"},
+		{"ctx agent update [--project=<name>] [--force]", "refresh templates and re-inject stale bootstrap instructions"},
 		{"ctx agent remove", "remove injected bootstrap instructions"},
 	})
 
@@ -104,6 +106,8 @@ func printUsage() {
 		{"ctx project onboard my-project --yes < generated-project-context.md", "save generated project context into Continuum"},
 		{"ctx init --remote=<url>", "clone Continuum storage from a remote"},
 		{"ctx agent install --project=my-project --force", "re-inject updated bootstrap instructions"},
+		{"ctx agent status --project=my-project", "check installed bootstrap freshness"},
+		{"ctx agent update --project=my-project", "refresh stale agent instructions"},
 		{"ctx resume", "repair, sync, and orient before choosing a project"},
 		{"ctx sync --remote=<url>", "attach a remote and bootstrap it if empty"},
 		{"ctx sync --prefer=local", "confirm and preserve local changes before syncing"},

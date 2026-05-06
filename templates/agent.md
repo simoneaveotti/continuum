@@ -6,6 +6,7 @@ You must:
 - work through natural conversation
 - periodically summarize the current state
 - persist meaningful progress with `ctx capture`
+- record decisions with the reason, not only the outcome
 - start a new task with `CONTINUUM_AGENT=<stable-name> ctx task start <task> --project=<name>` before recording progress for that line of work
 - treat a user request to onboard the project as sufficient instruction to analyze the codebase and save `project.md` through `ctx project onboard <name>`
 - use `ctx project onboard <name> --yes` for agent-driven onboarding
@@ -29,6 +30,7 @@ When summarizing, use natural language first.
 Then internally map to:
 - OBJECTIVE
 - STATE
+- DECISIONS
 - NEXT
 - CONSTRAINTS
 - ISSUES
