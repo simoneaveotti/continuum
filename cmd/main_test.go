@@ -449,9 +449,12 @@ func TestIsVersionCommand(t *testing.T) {
 
 func TestPrintVersion(t *testing.T) {
 	oldVersion := version
+	oldCommit := commit
 	version = "v1.2.3-test"
+	commit = "none"
 	t.Cleanup(func() {
 		version = oldVersion
+		commit = oldCommit
 	})
 
 	oldStdout := os.Stdout
@@ -476,6 +479,45 @@ func TestPrintVersion(t *testing.T) {
 	}
 	if got := buf.String(); got != "ctx v1.2.3-test\n" {
 		t.Fatalf("unexpected version output: %q", got)
+	}
+}
+
+func TestVersionString_UsesInjectedReleaseVersion(t *testing.T) {
+	oldVersion := version
+	oldCommit := commit
+	version = "v1.2.3"
+	commit = "abcdef1234567890"
+	t.Cleanup(func() {
+		version = oldVersion
+		commit = oldCommit
+	})
+
+	if got := versionString(); got != "v1.2.3" {
+		t.Fatalf("expected release version, got %q", got)
+	}
+}
+
+func TestVersionString_UsesInjectedCommitForDev(t *testing.T) {
+	oldVersion := version
+	oldCommit := commit
+	version = "dev"
+	commit = "abcdef1234567890"
+	t.Cleanup(func() {
+		version = oldVersion
+		commit = oldCommit
+	})
+
+	if got := versionString(); got != "dev+abcdef1" {
+		t.Fatalf("expected dev commit version, got %q", got)
+	}
+}
+
+func TestShortCommit(t *testing.T) {
+	if got := shortCommit("abcdef123"); got != "abcdef1" {
+		t.Fatalf("unexpected short commit: %q", got)
+	}
+	if got := shortCommit("abc"); got != "abc" {
+		t.Fatalf("unexpected short commit: %q", got)
 	}
 }
 
