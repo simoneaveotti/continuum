@@ -55,6 +55,8 @@ var (
 
 type tuiTickMsg struct{}
 
+const maxLegendAgents = 5
+
 type watchTUIModel struct {
 	projects    []string
 	allProjects []string
@@ -66,6 +68,7 @@ type watchTUIModel struct {
 	payloadTop  int
 	width       int
 	height      int
+	showAllAgents bool
 	agentColors map[string]lipgloss.Color
 	agentOrder  []string
 }
@@ -149,6 +152,8 @@ func (m watchTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cycleProjectFilter()
 		case "P":
 			m.setProjectFilter(nil)
+		case "a":
+			m.showAllAgents = !m.showAllAgents
 		}
 		return m, nil
 	case tea.WindowSizeMsg:
@@ -207,10 +212,10 @@ func (m watchTUIModel) View() string {
 
 	// chrome = header(1) + legend(1) + hSep(1) + footer(1) = 4
 	bodyH := max(10, m.height-4)
-	topH := (bodyH * 62) / 100
+	topH := (bodyH * 60) / 100
 	bottomH := bodyH - topH
 
-	leftW := (m.width * 62) / 100
+	leftW := (m.width * 70) / 100
 	rightW := max(1, m.width-leftW-1) // -1 for vertical sep
 
 	header := tuiBarStyle.Width(m.width).Render(m.renderHeaderBar())
@@ -225,7 +230,7 @@ func (m watchTUIModel) View() string {
 	payloadStr := m.renderPayloadSection(m.width, bottomH)
 
 	footer := tuiBarStyle.Width(m.width).Render(
-		"  q quit  ·  j/k events  ·  g/G first/last  ·  f/b payload ↑↓  ·  p next project  ·  P all",
+		"  q quit  ·  j/k events  ·  g/G first/last  ·  f/b payload ↑↓  ·  a agents  ·  p next project  ·  P all",
 	)
 
 	return strings.Join([]string{header, legend, topSection, hSep, payloadStr, footer}, "\n")
@@ -255,10 +260,14 @@ func (m watchTUIModel) renderLegend() string {
 	if len(m.agentOrder) == 0 {
 		return tuiMuted.Render("  no agents")
 	}
-	parts := make([]string, 0, len(m.agentOrder))
-	for _, agent := range m.agentOrder {
+	visibleAgents := m.visibleAgents()
+	parts := make([]string, 0, len(visibleAgents))
+	for _, agent := range visibleAgents {
 		agentStyle := lipgloss.NewStyle().Foreground(m.agentColors[agent])
 		parts = append(parts, agentStyle.Render("● "+agent))
+	}
+	if hiddenCount := len(m.agentOrder) - len(visibleAgents); hiddenCount > 0 {
+		parts = append(parts, tuiMuted.Render(fmt.Sprintf("+%d", hiddenCount)))
 	}
 	return "  " + strings.Join(parts, "   ")
 }
@@ -486,7 +495,7 @@ func (m *watchTUIModel) clampPayloadTop() {
 	}
 	totalLines := len(wrapLines(content, max(1, m.width-2)))
 	bodyH := max(10, m.height-4)
-	topH := (bodyH * 62) / 100
+	topH := (bodyH * 60) / 100
 	bottomH := bodyH - topH
 	contentH := max(1, bottomH-1) // -1 for section title line
 	maxTop := max(0, totalLines-contentH)
@@ -726,6 +735,20 @@ func normalizedAgent(agent string) string {
 		return "unknown"
 	}
 	return agent
+}
+
+func (m watchTUIModel) visibleAgents() []string {
+	if m.showAllAgents {
+		return append([]string(nil), m.agentOrder...)
+	}
+	return visibleAgentOrder(m.agentOrder, maxLegendAgents)
+}
+
+func visibleAgentOrder(agentOrder []string, limit int) []string {
+	if limit <= 0 || len(agentOrder) <= limit {
+		return append([]string(nil), agentOrder...)
+	}
+	return append([]string(nil), agentOrder[len(agentOrder)-limit:]...)
 }
 
 func sortEventsNewestFirst(items []events.Event) []events.Event {

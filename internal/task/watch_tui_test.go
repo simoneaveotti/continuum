@@ -1,9 +1,13 @@
 package task
 
 import (
+	"strings"
 	"testing"
 
 	"continuum/internal/events"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestShortTSIncludesDate(t *testing.T) {
@@ -130,5 +134,108 @@ func TestCycleProjectFilter(t *testing.T) {
 	m.cycleProjectFilter()
 	if len(m.projects) != 0 {
 		t.Fatalf("expected all-projects filter, got %#v", m.projects)
+	}
+}
+
+func TestVisibleAgentOrderReturnsLastAgents(t *testing.T) {
+	got := visibleAgentOrder([]string{"a", "b", "c", "d", "e", "f", "g"}, 5)
+	want := []string{"c", "d", "e", "f", "g"}
+	if len(got) != len(want) {
+		t.Fatalf("visibleAgentOrder length = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("visibleAgentOrder[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestVisibleAgentOrderCopiesWhenUnderLimit(t *testing.T) {
+	source := []string{"a", "b"}
+	got := visibleAgentOrder(source, 5)
+	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("unexpected visibleAgentOrder result: %#v", got)
+	}
+	got[0] = "changed"
+	if source[0] != "a" {
+		t.Fatalf("visibleAgentOrder should return a copy, source mutated: %#v", source)
+	}
+}
+
+func TestRenderLegendShowsHiddenAgentCount(t *testing.T) {
+	m := watchTUIModel{
+		agentOrder: []string{"a", "b", "c", "d", "e", "f", "g"},
+		agentColors: map[string]lipgloss.Color{
+			"a": lipgloss.Color("1"),
+			"b": lipgloss.Color("2"),
+			"c": lipgloss.Color("3"),
+			"d": lipgloss.Color("4"),
+			"e": lipgloss.Color("5"),
+			"f": lipgloss.Color("6"),
+			"g": lipgloss.Color("7"),
+		},
+	}
+
+	got := m.renderLegend()
+	for _, agent := range []string{"c", "d", "e", "f", "g"} {
+		if !strings.Contains(got, agent) {
+			t.Fatalf("renderLegend() missing visible agent %q: %q", agent, got)
+		}
+	}
+	for _, agent := range []string{"a", "b"} {
+		if strings.Contains(got, "● "+agent) {
+			t.Fatalf("renderLegend() should hide agent %q: %q", agent, got)
+		}
+	}
+	if !strings.Contains(got, "+2") {
+		t.Fatalf("renderLegend() missing hidden count: %q", got)
+	}
+}
+
+func TestRenderLegendShowsAllAgentsWhenExpanded(t *testing.T) {
+	m := watchTUIModel{
+		showAllAgents: true,
+		agentOrder:    []string{"a", "b", "c", "d", "e", "f", "g"},
+		agentColors: map[string]lipgloss.Color{
+			"a": lipgloss.Color("1"),
+			"b": lipgloss.Color("2"),
+			"c": lipgloss.Color("3"),
+			"d": lipgloss.Color("4"),
+			"e": lipgloss.Color("5"),
+			"f": lipgloss.Color("6"),
+			"g": lipgloss.Color("7"),
+		},
+	}
+
+	got := m.renderLegend()
+	for _, agent := range []string{"a", "b", "c", "d", "e", "f", "g"} {
+		if !strings.Contains(got, "● "+agent) {
+			t.Fatalf("renderLegend() missing expanded agent %q: %q", agent, got)
+		}
+	}
+	if strings.Contains(got, "+") {
+		t.Fatalf("renderLegend() should not show hidden count when expanded: %q", got)
+	}
+}
+
+func TestToggleShowAllAgentsKey(t *testing.T) {
+	m := watchTUIModel{}
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	toggled, ok := next.(watchTUIModel)
+	if !ok {
+		t.Fatalf("Update() returned %T, want watchTUIModel", next)
+	}
+	if !toggled.showAllAgents {
+		t.Fatalf("expected showAllAgents to be enabled")
+	}
+
+	next, _ = toggled.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	toggled, ok = next.(watchTUIModel)
+	if !ok {
+		t.Fatalf("Update() returned %T, want watchTUIModel", next)
+	}
+	if toggled.showAllAgents {
+		t.Fatalf("expected showAllAgents to be disabled")
 	}
 }
