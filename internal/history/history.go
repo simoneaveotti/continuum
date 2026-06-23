@@ -11,6 +11,7 @@ import (
 
 	"continuum/internal/events"
 	"continuum/internal/filestore"
+	"continuum/internal/parse"
 	"continuum/internal/setup"
 
 	"github.com/mattn/go-isatty"
@@ -187,13 +188,13 @@ func milestoneFromSnapshot(project, taskName, path string, since time.Duration) 
 	}
 	content := string(data)
 	title := firstNonEmpty(
-		extractField(content, "objective"),
-		extractField(content, "current state"),
-		extractField(content, "next step"),
+		parse.ExtractField(content, "objective"),
+		parse.ExtractField(content, "current state"),
+		parse.ExtractField(content, "next step"),
 		"snapshot updated",
 	)
 	state := extractState(content)
-	next := extractField(content, "next step")
+	next := parse.ExtractField(content, "next step")
 	return milestone{
 		Timestamp: ts.UTC().Format(time.RFC3339),
 		Project:   project,
@@ -221,18 +222,18 @@ func milestoneFromHandoff(project, taskName, path string, since time.Duration) (
 	}
 	content := string(data)
 	title := firstNonEmpty(
-		extractField(content, "objective"),
-		extractField(content, "what was done"),
-		extractField(content, "current state"),
+		parse.ExtractField(content, "objective"),
+		parse.ExtractField(content, "what was done"),
+		parse.ExtractField(content, "current state"),
 		"handoff saved",
 	)
 	state := firstNonEmpty(
-		extractField(content, "what was done"),
-		extractField(content, "current state"),
+		parse.ExtractField(content, "what was done"),
+		parse.ExtractField(content, "current state"),
 	)
 	next := firstNonEmpty(
-		extractField(content, "next recommended step"),
-		extractField(content, "next step"),
+		parse.ExtractField(content, "next recommended step"),
+		parse.ExtractField(content, "next step"),
 	)
 	return milestone{
 		Timestamp: ts.UTC().Format(time.RFC3339),
@@ -456,36 +457,6 @@ func extractBulletPoints(content string) []string {
 	}
 	return items
 }
-
-func extractField(content, fieldName string) string {
-	lowerField := strings.ToLower(fieldName)
-	inSection := false
-	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		lower := strings.ToLower(line)
-		if strings.HasPrefix(lower, "## ") || strings.HasPrefix(lower, "# ") {
-			if inSection {
-				break
-			}
-			sectionName := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(lower, "## "), "# "))
-			if strings.Contains(sectionName, lowerField) ||
-				(lowerField == "what was done" && strings.Contains(sectionName, "what")) ||
-				(lowerField == "next recommended step" && strings.Contains(sectionName, "next")) {
-				inSection = true
-			}
-			continue
-		}
-		if !inSection {
-			continue
-		}
-		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(line, "-"), "*"))
-		if line != "" && !strings.HasPrefix(line, "#") {
-			return line
-		}
-	}
-	return ""
-}
-
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		value = strings.TrimSpace(value)

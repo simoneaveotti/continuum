@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"continuum/internal/events"
+	"continuum/internal/skill"
 	"continuum/internal/template"
 )
 
@@ -92,6 +93,15 @@ func initBase(base string, force bool) error {
 	} else {
 		if err := writeFile(filepath.Join(base, "skills", "agent.md"), agentData, force); err != nil {
 			return fmt.Errorf("cannot create agent skill: %w", err)
+		}
+	}
+
+	if force {
+		skillsDir := filepath.Join(base, "skills")
+		if migrated, err := skill.MigrateAgentToIndex(skillsDir); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: skills index migration failed: %v\n", err)
+		} else if migrated {
+			fmt.Println("Created skills index at", skillsDir+"/index.md")
 		}
 	}
 

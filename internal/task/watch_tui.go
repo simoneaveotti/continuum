@@ -495,7 +495,7 @@ func (m *watchTUIModel) clampPayloadTop() {
 	}
 	totalLines := len(wrapLines(content, max(1, m.width-2)))
 	bodyH := max(10, m.height-4)
-	topH := (bodyH * 60) / 100
+	topH := (bodyH * 62) / 100
 	bottomH := bodyH - topH
 	contentH := max(1, bottomH-1) // -1 for section title line
 	maxTop := max(0, totalLines-contentH)

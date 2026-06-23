@@ -277,7 +277,7 @@ func CaptureWithOptions(task, project string, opts CaptureOptions) error {
 		if resolves != "" {
 			body = appendResolution(body, resolves)
 		}
-		return confirmAndSave(task, buildRawCaptureSummary(captureType, body), piped, opts.AutoConfirm, func() error {
+		return confirmAndSave(task, buildRawCaptureSummary(captureType, body), opts.AutoConfirm, func() error {
 			name, err := saveRawCapture(task, project, captureType, body)
 			if err != nil {
 				return fmt.Errorf("cannot save %s: %w", captureType, err)
@@ -288,7 +288,7 @@ func CaptureWithOptions(task, project string, opts CaptureOptions) error {
 					_ = os.Remove(filepath.Join(setup.ContinuumPath(), "projects", project, "tasks", task, name))
 					return err
 				}
-				files = append(files, artifactFile(project, task, resolves), resolvedArtifactFile(project, task, resolves))
+				files = append(files, taskFile(project, task, resolves), resolvedArtifactFile(project, task, resolves))
 			}
 			summary := fmt.Sprintf("%s captured", captureType)
 			if err := commitTaskWrite(project, task, string(captureType), summary, files); err != nil {
@@ -317,7 +317,7 @@ func CaptureWithOptions(task, project string, opts CaptureOptions) error {
 		return fmt.Errorf("--resolves can only be used with --type=decision")
 	}
 
-	return confirmAndSave(task, BuildCaptureSummary(data), piped, opts.AutoConfirm, func() error {
+	return confirmAndSave(task, BuildCaptureSummary(data), opts.AutoConfirm, func() error {
 		name, err := saveSnapshot(task, project, data)
 		if err != nil {
 			return fmt.Errorf("cannot save snapshot: %w", err)

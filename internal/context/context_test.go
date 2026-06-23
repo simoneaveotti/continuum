@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"continuum/internal/parse"
 )
 
 func TestExtractField(t *testing.T) {
@@ -30,9 +32,9 @@ Write tests
 	}
 
 	for _, tt := range tests {
-		got := extractField(content, tt.field)
+		got := parse.ExtractField(content, tt.field)
 		if got != tt.want {
-			t.Errorf("extractField(%q) = %q, want %q", tt.field, got, tt.want)
+			t.Errorf("parse.ExtractField(%q) = %q, want %q", tt.field, got, tt.want)
 		}
 	}
 }

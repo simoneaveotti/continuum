@@ -285,7 +285,7 @@ func Handoff(task, project string, autoConfirm bool) error {
 	outputPath := filepath.Join(taskDir, outputName)
 	content := buildHandoffMarkdown(data)
 
-	return confirmAndSave(task, buildHandoffSummary(&data), piped, autoConfirm, func() error {
+	return confirmAndSave(task, buildHandoffSummary(&data), autoConfirm, func() error {
 		if err := filestore.AtomicWrite(outputPath, []byte(content)); err != nil {
 			return fmt.Errorf("cannot write handoff: %w", err)
 		}

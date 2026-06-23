@@ -70,6 +70,13 @@ func printUsage() {
 		{"ctx snapshot clean <task> --project=<name>", "prune older snapshots for a task"},
 	})
 
+	printUsageSection("Skills", [][2]string{
+		{"ctx skill list", "list all reusable skills"},
+		{"ctx skill show <name>", "print a skill's content"},
+		{"ctx skill save <name> [--description=<text>] [--yes]", "save streamed content as a named skill"},
+		{"ctx skill delete <name> [--yes]", "delete a skill and remove it from the index"},
+	})
+
 	printUsageSection("Import / Export", [][2]string{
 		{"ctx export <task>", "export a task archive"},
 		{"ctx export --project=<name>", "export one or more project archives"},

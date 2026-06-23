@@ -59,7 +59,7 @@ func TestConfirmAndSaveAutoConfirmSkipsPrompt(t *testing.T) {
 	called := false
 
 	output := captureStdout(t, func() {
-		err := confirmAndSave("demo", "State: ok", true, true, func() error {
+		err := confirmAndSave("demo", "State: ok", true, func() error {
 			called = true
 			return nil
 		}, "State saved.")
@@ -82,7 +82,7 @@ func TestConfirmAndSaveAutoConfirmSkipsPrompt(t *testing.T) {
 func TestConfirmAndSaveInteractiveShowsPrompt(t *testing.T) {
 	output := captureStdout(t, func() {
 		withStdin(t, "n\n", func() {
-			_ = confirmAndSave("demo", "State: ok", false, false, func() error {
+			_ = confirmAndSave("demo", "State: ok", false, func() error {
 				return nil
 			}, "State saved.")
 		})

@@ -17,6 +17,11 @@ type VCS interface {
 	// No-op if .git/ already exists.
 	Init(path string) error
 
+	// SetIdentity overrides the author/committer identity used for git commits.
+	// When not set, Continuum reads user.name / user.email from the repo's git
+	// config and falls back to "Continuum <continuum@local>".
+	SetIdentity(name, email string)
+
 	// Clone clones url into path. Fails if path is non-empty.
 	Clone(url, path string) error
 

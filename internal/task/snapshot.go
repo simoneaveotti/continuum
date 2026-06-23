@@ -216,7 +216,7 @@ func SnapshotRefresh(task, project string, autoConfirm bool) error {
 	outputPath := filepath.Join(taskDir, outputName)
 	content := buildSnapshotMarkdown(data)
 
-	return confirmAndSave(task, buildSnapshotSummary(&data), piped, autoConfirm, func() error {
+	return confirmAndSave(task, buildSnapshotSummary(&data), autoConfirm, func() error {
 		if err := filestore.AtomicWrite(outputPath, []byte(content)); err != nil {
 			return fmt.Errorf("cannot write snapshot: %w", err)
 		}

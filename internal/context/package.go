@@ -27,8 +27,8 @@ func writeSection(b *strings.Builder, title, value string) {
 }
 
 func BuildPromptOnlyPackage(ctx *ContextData) string {
-	snap := ParseSections(ctx.Snapshot)
-	handoff := ParseSections(ctx.Handoff)
+	snap := parse.Sections(ctx.Snapshot)
+	handoff := parse.Sections(ctx.Handoff)
 
 	var b strings.Builder
 

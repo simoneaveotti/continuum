@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"continuum/internal/filestore"
+	"continuum/internal/parse"
 	"continuum/internal/setup"
 	"continuum/internal/task"
 )
@@ -84,7 +85,7 @@ func BuildContextPackage(ctx *ContextData, task, project string) string {
 
 	// PROJECT
 	lines = append(lines, fmt.Sprintf("PROJECT: %s", project))
-	summary := extractField(ctx.Project, "summary")
+	summary := parse.ExtractField(ctx.Project, "summary")
 	if summary == "" || summary == "..." {
 		summary = project
 	}
@@ -152,7 +153,7 @@ func BuildContextPackage(ctx *ContextData, task, project string) string {
 
 		if snapshot != "" || handoff != "" {
 			// OBJECTIVE
-			objective := extractField(snapshot, "objective")
+			objective := parse.ExtractField(snapshot, "objective")
 			if objective == "" || objective == "..." {
 				objective = "not yet defined"
 			}
@@ -167,7 +168,7 @@ func BuildContextPackage(ctx *ContextData, task, project string) string {
 			}
 
 			// NEXT STEP
-			nextStep := extractField(snapshot, "next step")
+			nextStep := parse.ExtractField(snapshot, "next step")
 			if nextStep == "" || nextStep == "..." {
 				nextStep = "not yet defined"
 			}
@@ -187,7 +188,7 @@ func BuildContextPackage(ctx *ContextData, task, project string) string {
 			for onlyTask, taskCtx := range ctx.TaskContexts {
 				lines = append(lines, fmt.Sprintf("CURRENT FOCUS: %s", onlyTask))
 
-				objective := extractField(taskCtx.Snapshot, "objective")
+				objective := parse.ExtractField(taskCtx.Snapshot, "objective")
 				if objective == "" || objective == "..." {
 					objective = "not yet defined"
 				}
@@ -200,7 +201,7 @@ func BuildContextPackage(ctx *ContextData, task, project string) string {
 					lines = append(lines, "CURRENT STATE: not yet defined")
 				}
 
-				nextStep := extractField(taskCtx.Snapshot, "next step")
+				nextStep := parse.ExtractField(taskCtx.Snapshot, "next step")
 				if nextStep == "" || nextStep == "..." {
 					nextStep = "not yet defined"
 				}
@@ -264,12 +265,12 @@ func BuildCompactContextPackage(ctx *ContextData, taskName, project string) stri
 	if len(ctx.Unsynced) > 0 {
 		appendCompactField("UNSYNCED", fmt.Sprintf("%d commit(s) pending upload", len(ctx.Unsynced)))
 	}
-	appendCompactField("OBJ", extractField(snapshot, "objective"))
+	appendCompactField("OBJ", parse.ExtractField(snapshot, "objective"))
 	appendCompactField("STATE", extractStateSimple(snapshot))
-	appendCompactField("NEXT", extractField(snapshot, "next step"))
-	appendCompactField("ISSUES", extractField(snapshot, "active issues"))
+	appendCompactField("NEXT", parse.ExtractField(snapshot, "next step"))
+	appendCompactField("ISSUES", parse.ExtractField(snapshot, "active issues"))
 	appendCompactField("DECIDED", compactDecisions(snapshot, ctx.Project))
-	appendCompactField("LAST", extractField(handoff, "what was done"))
+	appendCompactField("LAST", parse.ExtractField(handoff, "what was done"))
 	if focus != "" {
 		appendCompactCollaboration(&lines, focus, project)
 	}
@@ -343,7 +344,7 @@ func appendCompactCollaboration(lines *[]string, taskName, project string) {
 
 func compactDecisions(snapshot, projectData string) string {
 	var decisions []string
-	if value := cleanCompactValue(extractField(snapshot, "locked decisions")); value != "" {
+	if value := cleanCompactValue(parse.ExtractField(snapshot, "locked decisions")); value != "" {
 		decisions = append(decisions, value)
 	}
 	for _, constraint := range extractConstraints(projectData) {
@@ -435,7 +436,7 @@ func latestArtifactSummary(path string) string {
 	content := string(data)
 	body := artifactBody(content)
 	for _, section := range []string{"decision", "recommendation", "response", "request", "proposal"} {
-		if value := extractField(body, section); value != "" && value != "..." {
+		if value := parse.ExtractField(body, section); value != "" && value != "..." {
 			return compactSummary(value)
 		}
 	}
@@ -494,7 +495,7 @@ func compactSummary(value string) string {
 // Helper functions
 
 func extractStackCore(content string) string {
-	items := extractBulletList(content, "stack")
+	items := parse.ExtractBulletList(content, "stack")
 	if len(items) == 0 {
 		return ""
 	}
@@ -526,7 +527,7 @@ func extractStackCore(content string) string {
 }
 
 func extractConstraints(content string) []string {
-	items := extractBulletList(content, "constraint")
+	items := parse.ExtractBulletList(content, "constraint")
 	if len(items) == 0 {
 		return []string{}
 	}
@@ -605,42 +606,6 @@ func extractStateSimple(content string) string {
 	return ""
 }
 
-func extractBulletList(content, sectionName string) []string {
-	var lines []string
-	lowerSection := strings.ToLower(sectionName)
-	inSection := false
-
-	for _, line := range splitLines(content) {
-		line = trimSpace(line)
-		lower := strings.ToLower(line)
-
-		if strings.HasPrefix(lower, "## ") || strings.HasPrefix(lower, "# ") {
-			if inSection {
-				break
-			}
-			sectionTitle := strings.TrimPrefix(lower, "## ")
-			sectionTitle = strings.TrimPrefix(sectionTitle, "# ")
-			sectionTitle = strings.TrimSpace(sectionTitle)
-			if strings.Contains(sectionTitle, lowerSection) {
-				inSection = true
-				continue
-			}
-			continue
-		}
-
-		if inSection {
-			line = stripPrefix(line, "-")
-			line = stripPrefix(line, "*")
-			line = trimSpace(line)
-			if line != "" && !strings.HasPrefix(line, "#") {
-				lines = append(lines, line)
-			}
-		}
-	}
-
-	return lines
-}
-
 func extractBulletPoints(content string) []string {
 	var lines []string
 	inList := false
@@ -669,44 +634,6 @@ func extractBulletPoints(content string) []string {
 	}
 
 	return lines
-}
-
-func extractField(content, fieldName string) string {
-	lowerField := strings.ToLower(fieldName)
-	inSection := false
-
-	for _, line := range splitLines(content) {
-		line = trimSpace(line)
-		lower := strings.ToLower(line)
-
-		if strings.HasPrefix(lower, "## ") || strings.HasPrefix(lower, "# ") {
-			if inSection {
-				break
-			}
-			sectionName := strings.TrimPrefix(lower, "## ")
-			sectionName = strings.TrimPrefix(sectionName, "# ")
-			sectionName = strings.TrimSpace(sectionName)
-			if strings.Contains(sectionName, lowerField) ||
-				(lowerField == "locked decisions" && strings.Contains(sectionName, "decision")) ||
-				(lowerField == "open issues" && strings.Contains(sectionName, "active")) ||
-				(lowerField == "what was done" && strings.Contains(sectionName, "what")) {
-				inSection = true
-				continue
-			}
-			continue
-		}
-
-		if inSection {
-			line = stripPrefix(line, "-")
-			line = stripPrefix(line, "*")
-			line = trimSpace(line)
-			if line != "" && !strings.HasPrefix(line, "#") {
-				return line
-			}
-		}
-	}
-
-	return ""
 }
 
 func splitLines(s string) []string {

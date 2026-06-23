@@ -60,6 +60,10 @@ if command -v xattr >/dev/null 2>&1; then
   xattr -c "$INSTALL_DIR/$BINARY" 2>/dev/null || true
 fi
 
+if [[ "$OS" == "darwin" ]] && command -v codesign >/dev/null 2>&1; then
+  codesign --force --sign - "$INSTALL_DIR/$BINARY" 2>/dev/null || true
+fi
+
 echo "ctx ${VERSION} installed to ${INSTALL_DIR}/${BINARY}"
 case ":${PATH}:" in
   *":${INSTALL_DIR}:"*) ;;

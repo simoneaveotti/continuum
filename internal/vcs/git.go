@@ -11,7 +11,9 @@ import (
 
 // Git implements VCS using the system git binary.
 type Git struct {
-	logPath string // path to git.log; empty = no logging
+	logPath    string // path to git.log; empty = no logging
+	authorName string // user name for git commits (empty = resolve from git config)
+	authorEmail string // user email for git commits (empty = resolve from git config)
 }
 
 const gitLogMaxBytes = 1 << 20
@@ -20,6 +22,33 @@ const gitLogMaxBytes = 1 << 20
 // errors to; pass "" to disable logging.
 func NewGit(logPath string) *Git {
 	return &Git{logPath: logPath}
+}
+
+// SetIdentity overrides the author/committer identity used in git commits.
+// When not set, the identity is resolved lazily from the repo's git config.
+func (g *Git) SetIdentity(name, email string) {
+	g.authorName = name
+	g.authorEmail = email
+}
+
+// ensureIdentity resolves the git identity from the repository config if not
+// already set. Falls back to "Continuum <continuum@local>".
+func (g *Git) ensureIdentity(path string) {
+	if g.authorName != "" {
+		return
+	}
+	g.authorName = "Continuum"
+	g.authorEmail = "continuum@local"
+	if out, err := exec.Command("git", "-C", path, "config", "user.name").Output(); err == nil {
+		if n := strings.TrimSpace(string(out)); n != "" {
+			g.authorName = n
+		}
+	}
+	if out, err := exec.Command("git", "-C", path, "config", "user.email").Output(); err == nil {
+		if e := strings.TrimSpace(string(out)); e != "" {
+			g.authorEmail = e
+		}
+	}
 }
 
 func (g *Git) Init(path string) error {
@@ -166,11 +195,14 @@ func (g *Git) run(path string, args ...string) error {
 
 // runAt executes git <args> with an arbitrary working directory (can be "").
 func (g *Git) runAt(dir string, args ...string) error {
+	if dir != "" {
+		g.ensureIdentity(dir)
+	}
 	cmd := exec.Command("git", args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
-	cmd.Env = gitEnv()
+	cmd.Env = g.gitEnv()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		g.logError(strings.Join(args, " "), err, string(out))
@@ -186,9 +218,10 @@ func (g *Git) output(path string, args ...string) (string, error) {
 }
 
 func (g *Git) remoteURLNoLog(path, name string) (string, error) {
+	g.ensureIdentity(path)
 	cmd := exec.Command("git", "remote", "get-url", name)
 	cmd.Dir = path
-	cmd.Env = gitEnv()
+	cmd.Env = g.gitEnv()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
@@ -197,9 +230,10 @@ func (g *Git) remoteURLNoLog(path, name string) (string, error) {
 }
 
 func (g *Git) runAndCapture(path string, args ...string) (string, error) {
+	g.ensureIdentity(path)
 	cmd := exec.Command("git", args...)
 	cmd.Dir = path
-	cmd.Env = gitEnv()
+	cmd.Env = g.gitEnv()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		g.logError(strings.Join(args, " "), err, string(out))
@@ -259,13 +293,13 @@ func IsGitError(err error) bool {
 	return ok
 }
 
-func gitEnv() []string {
+func (g *Git) gitEnv() []string {
 	env := os.Environ()
 	env = append(env,
-		"GIT_AUTHOR_NAME=Continuum",
-		"GIT_AUTHOR_EMAIL=continuum@local",
-		"GIT_COMMITTER_NAME=Continuum",
-		"GIT_COMMITTER_EMAIL=continuum@local",
+		"GIT_AUTHOR_NAME="+g.authorName,
+		"GIT_AUTHOR_EMAIL="+g.authorEmail,
+		"GIT_COMMITTER_NAME="+g.authorName,
+		"GIT_COMMITTER_EMAIL="+g.authorEmail,
 	)
 	return env
 }

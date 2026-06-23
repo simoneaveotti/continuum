@@ -86,6 +86,11 @@ func TestExtractZipFile_AbsolutePath(t *testing.T) {
 	}
 }
 
+func extractTaskName(zipPath string, zipReader *zip.Reader) string {
+	name, _ := extractTaskInfo(zipPath, zipReader)
+	return name
+}
+
 // --- extractTaskName ---
 
 func TestExtractTaskName_FromSnapshot(t *testing.T) {

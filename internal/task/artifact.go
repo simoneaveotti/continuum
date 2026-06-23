@@ -102,10 +102,6 @@ func resolveArtifactWithoutCommit(task, project, name string) error {
 	return filestore.ResolveArtifact(taskDir, name)
 }
 
-func artifactFile(project, task, name string) string {
-	return taskFile(project, task, name)
-}
-
 func resolvedArtifactFile(project, task, name string) string {
 	return taskFile(project, task, filepath.ToSlash(filepath.Join("resolved", name)))
 }

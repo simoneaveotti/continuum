@@ -63,6 +63,34 @@ If work clearly belongs to a different task, create or switch tasks autonomously
 
 Do not ask the user to restate information already present in this context.
 
+## State 1.5: Skills (optional)
+
+Cross-project skills are available for reuse.
+Run `ctx skill show index` for a quick overview of available skills.
+Load a relevant skill with `ctx skill show <name>` when applicable.
+
+When you solve a problem that took significant effort or that could recur
+across projects, document it:
+
+    ctx skill save <name> --yes <<'EOF'
+    # <Skill Title>
+
+    ## Problem
+    <what problem this solves>
+
+    ## Solution
+    <the solution>
+
+    ## When to Apply
+    <context in which this is useful>
+    EOF
+
+The user may also hint with natural language:
+- "use the skill we defined for auth"
+- "do you remember how we solved the queue issue?"
+
+Respond by running `ctx skill list` and `ctx skill show <relevant-name>` autonomously.
+
 ---
 
 ## Instruction Currency Check

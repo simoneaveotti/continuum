@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -13,8 +12,10 @@ import (
 	"continuum/internal/filestore"
 	"continuum/internal/history"
 	"continuum/internal/identity"
+	"continuum/internal/prompt"
 	"continuum/internal/search"
 	"continuum/internal/setup"
+	"continuum/internal/skill"
 	"continuum/internal/task"
 	"continuum/internal/template"
 
@@ -143,8 +144,7 @@ func handleContext(args []string) {
 func handleSync(args []string) {
 	remote, prefer, force, err := parseSyncArgs(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		die(err)
 	}
 
 	if prefer != "" && !force {
@@ -193,35 +193,11 @@ func handleSync(args []string) {
 }
 
 func confirmSyncPreference(prefer string) (bool, error) {
-	if !isatty.IsTerminal(os.Stdout.Fd()) || (!isatty.IsTerminal(os.Stdin.Fd()) && !isatty.IsCygwinTerminal(os.Stdin.Fd())) {
-		return false, fmt.Errorf("non-interactive sync requires --force with --prefer=%s", prefer)
-	}
-
 	message := "This will preserve local uncommitted Continuum changes and sync them to the remote. Continue? [y/N]: "
 	if prefer == "remote" {
 		message = "This will discard local uncommitted Continuum changes and resync from the remote. Continue? [y/N]: "
 	}
-
-	var reader *bufio.Reader
-	tty, err := os.Open("/dev/tty")
-	if err == nil {
-		defer tty.Close()
-		reader = bufio.NewReader(tty)
-	} else {
-		reader = bufio.NewReader(os.Stdin)
-	}
-
-	fmt.Print(message)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return false, fmt.Errorf("cannot read sync confirmation: %w", err)
-	}
-	switch strings.ToLower(strings.TrimSpace(input)) {
-	case "y", "yes":
-		return true, nil
-	default:
-		return false, nil
-	}
+	return prompt.Confirm(message)
 }
 
 func handleRepair(args []string) {
@@ -301,8 +277,7 @@ func handleResume(args []string) {
 func handleWatch(args []string) {
 	project, interval, tui, err := parseWatchArgs(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		die(err)
 	}
 	if tui {
 		err = task.WatchTUI(project, interval)
@@ -317,8 +292,7 @@ func handleWatch(args []string) {
 func handleSearch(args []string) {
 	project, taskName, query, limit, since, err := parseSearchArgsFull(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		die(err)
 	}
 
 	results, err := search.Search(query, project, taskName, limit, since)
@@ -389,8 +363,7 @@ func handleResolve(args []string) {
 func handleHistory(args []string) {
 	project, taskName, limit, since, err := parseHistoryArgs(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		die(err)
 	}
 	if project == "" && taskName == "" {
 		project = resolveProject("")
@@ -409,8 +382,7 @@ func handleHistory(args []string) {
 func handleTimeline(args []string) {
 	project, taskName, limit, since, err := parseHistoryArgs(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		die(err)
 	}
 	if project == "" && taskName == "" {
 		project = resolveProject("")
@@ -429,8 +401,7 @@ func handleTimeline(args []string) {
 func handleDiff(args []string) {
 	project, taskName, fromName, toName, err := parseDiffArgs(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		die(err)
 	}
 	project = resolveProject(project)
 
@@ -715,11 +686,11 @@ func handleProject(args []string) {
 			fmt.Fprintln(os.Stderr, "Usage: ctx project onboard <project> [--force] [--yes]")
 			os.Exit(1)
 		}
-		content, piped, err := readProjectOnboardContent()
+		content, _, err := readProjectOnboardContent()
 		if err != nil {
 			die(err)
 		}
-		if err := confirmProjectOnboard(project, string(content), piped, autoConfirm, func() error {
+		if err := confirmProjectOnboard(project, string(content), autoConfirm, func() error {
 			return setup.OnboardProject(project, content, force)
 		}); err != nil {
 			die(err)
@@ -753,9 +724,10 @@ func readProjectOnboardContent() ([]byte, bool, error) {
 	return content, true, nil
 }
 
-func confirmProjectOnboard(project, content string, piped, autoConfirm bool, save func() error) error {
+func confirmProjectOnboard(project, content string, autoConfirm bool, save func() error) error {
+	fmt.Printf("\nProposed project context for '%s':\n\n%s\n\n", project, strings.TrimSpace(content))
+
 	if autoConfirm {
-		fmt.Printf("\nProposed project context for '%s':\n\n%s\n\n", project, strings.TrimSpace(content))
 		if err := save(); err != nil {
 			return err
 		}
@@ -764,34 +736,18 @@ func confirmProjectOnboard(project, content string, piped, autoConfirm bool, sav
 		return nil
 	}
 
-	fmt.Printf("\nProposed project context for '%s':\n\n%s\n\nApply this project onboarding? [y] yes  [n] no\n", project, strings.TrimSpace(content))
-	fmt.Print("> ")
-
-	var reader *bufio.Reader
-	if piped {
-		tty, err := os.Open("/dev/tty")
-		if err != nil {
-			return fmt.Errorf("cannot open /dev/tty for confirmation: %w", err)
-		}
-		defer tty.Close()
-		reader = bufio.NewReader(tty)
-	} else {
-		reader = bufio.NewReader(os.Stdin)
+	ok, err := prompt.Confirm("Apply this project onboarding? [y] yes  [n] no\n> ")
+	if err != nil {
+		return err
 	}
-
-	input, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
-		return fmt.Errorf("cannot read input: %w", err)
-	}
-	switch strings.TrimSpace(strings.ToLower(input)) {
-	case "y", "yes":
-		if err := save(); err != nil {
-			return err
-		}
-		fmt.Println("Project context saved.")
-	default:
+	if !ok {
 		fmt.Println("Discarded.")
+		return nil
 	}
+	if err := save(); err != nil {
+		return err
+	}
+	fmt.Println("Project context saved.")
 	return nil
 }
 
@@ -829,6 +785,155 @@ func handleSnapshot(args []string) {
 		}
 	default:
 		fmt.Fprintln(os.Stderr, "Usage: ctx snapshot refresh <task>")
+		os.Exit(1)
+	}
+}
+
+func skillsBasePath() string {
+	return setup.ResolvePath("skills")
+}
+
+func handleSkill(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Usage: ctx skill list")
+		fmt.Fprintln(os.Stderr, "       ctx skill show <name>")
+		fmt.Fprintln(os.Stderr, "       ctx skill save <name> [--yes]")
+		os.Exit(1)
+	}
+
+	switch args[0] {
+	case "list":
+		entries, fromIndex, err := skill.ListWithDescriptions(skillsBasePath())
+		if err != nil {
+			die(err)
+		}
+		if len(entries) == 0 {
+			fmt.Println("No skills found. Use ctx skill save <name> to create one.")
+			return
+		}
+		if fromIndex {
+			maxLen := 0
+			for _, e := range entries {
+				if len(e.Name) > maxLen {
+					maxLen = len(e.Name)
+				}
+			}
+			for _, e := range entries {
+				if e.Description != "" {
+					fmt.Printf("%-*s  %s\n", maxLen, e.Name, e.Description)
+				} else {
+					fmt.Println(e.Name)
+				}
+			}
+		} else {
+			for _, e := range entries {
+				fmt.Println(e.Name)
+			}
+		}
+
+	case "show":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "Usage: ctx skill show <name>")
+			os.Exit(1)
+		}
+		name := args[1]
+		content, err := skill.Show(skillsBasePath(), name)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err.Error())
+			os.Exit(1)
+		}
+		fmt.Print(content)
+
+	case "save":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "Usage: ctx skill save <name> [--description=<text>] [--yes]")
+			os.Exit(1)
+		}
+		name := args[1]
+		autoConfirm := false
+		description := ""
+		for _, arg := range args[2:] {
+			if arg == "--yes" {
+				autoConfirm = true
+			} else if val, ok := parseFlag(arg, "--description="); ok {
+				description = val
+			} else {
+				fmt.Fprintln(os.Stderr, "Usage: ctx skill save <name> [--description=<text>] [--yes]")
+				os.Exit(1)
+			}
+		}
+
+		content, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			die(fmt.Errorf("cannot read skill content: %w", err))
+		}
+
+		base := skillsBasePath()
+
+		// migrate agent.md → index.md on first save if needed
+		if migrated, err := skill.MigrateAgentToIndex(base); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: skills index migration failed: %v\n", err)
+		} else if migrated {
+			fmt.Printf("Created skills index at %s/index.md\n", base)
+		}
+
+		existing, showErr := skill.Show(base, name)
+		if showErr == nil && !autoConfirm {
+			fmt.Printf("Skill %q already exists:\n\n%s\n\n", name, existing)
+			ok, err := prompt.Confirm("Overwrite? [y/N]: ")
+			if err != nil {
+				die(err)
+			}
+			if !ok {
+				fmt.Println("Discarded.")
+				return
+			}
+		}
+
+		if err := skill.Save(base, name, string(content), autoConfirm || showErr != nil); err != nil {
+			die(err)
+		}
+		if err := skill.UpdateIndex(base, name, description); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not update skills index: %v\n", err)
+		}
+		fmt.Printf("Skill %q saved.\n", name)
+
+	case "delete":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "Usage: ctx skill delete <name> [--yes]")
+			os.Exit(1)
+		}
+		name := args[1]
+		autoConfirm := false
+		for _, arg := range args[2:] {
+			if arg == "--yes" {
+				autoConfirm = true
+			} else {
+				fmt.Fprintln(os.Stderr, "Usage: ctx skill delete <name> [--yes]")
+				os.Exit(1)
+			}
+		}
+
+		if !autoConfirm {
+			ok, err := prompt.Confirm(fmt.Sprintf("Delete skill %q? [y/N]: ", name))
+			if err != nil {
+				die(err)
+			}
+			if !ok {
+				fmt.Println("Aborted.")
+				return
+			}
+		}
+
+		if err := skill.Delete(skillsBasePath(), name); err != nil {
+			fmt.Fprintln(os.Stderr, err.Error())
+			os.Exit(1)
+		}
+		fmt.Printf("Skill %q deleted.\n", name)
+
+	default:
+		fmt.Fprintln(os.Stderr, "Unknown skill subcommand:", args[0])
+		fmt.Fprintln(os.Stderr, "Usage: ctx skill list|show|save|delete ...")
 		os.Exit(1)
 	}
 }
@@ -905,6 +1010,8 @@ func dispatchCommand(command string, args []string) {
 		handleProject(args)
 	case "snapshot":
 		handleSnapshot(args)
+	case "skill":
+		handleSkill(args)
 	case "config":
 		handleConfig(args)
 	default:
