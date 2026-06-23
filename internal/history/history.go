@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -12,9 +11,8 @@ import (
 	"continuum/internal/events"
 	"continuum/internal/filestore"
 	"continuum/internal/parse"
+	"continuum/internal/prompt"
 	"continuum/internal/setup"
-
-	"github.com/mattn/go-isatty"
 )
 
 type milestone struct {
@@ -29,7 +27,6 @@ type milestone struct {
 }
 
 var (
-	historyANSIPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	historyHeaderStyle = ansiStyle("1", "38;5;110")
 	historyIndexStyle  = ansiStyle("1", "38;5;73")
 	historyTargetStyle = ansiStyle("38;5;221")
@@ -420,10 +417,7 @@ func shortHistoryTS(value string) string {
 }
 
 func extractState(content string) string {
-	items := extractBulletPoints(content)
-	if len(items) == 0 {
-		return ""
-	}
+	items := parse.ExtractBulletList(content, "state")
 	var out []string
 	for i, item := range items {
 		if i >= 2 {
@@ -435,27 +429,6 @@ func extractState(content string) string {
 		}
 	}
 	return strings.Join(out, " | ")
-}
-
-func extractBulletPoints(content string) []string {
-	var items []string
-	inSection := false
-	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		lower := strings.ToLower(line)
-		if strings.HasPrefix(lower, "## ") || strings.HasPrefix(lower, "# ") {
-			inSection = strings.Contains(lower, "state") || strings.Contains(lower, "current")
-			continue
-		}
-		if !inSection {
-			continue
-		}
-		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(line, "-"), "*"))
-		if line != "" {
-			items = append(items, line)
-		}
-	}
-	return items
 }
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
@@ -502,13 +475,13 @@ func historyColorsEnabled() bool {
 	if term := os.Getenv("TERM"); term == "" || term == "dumb" {
 		return false
 	}
-	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+	return prompt.IsInteractiveOutput()
 }
 
 func ansiStyle(codes ...string) string {
-	return "\x1b[" + strings.Join(codes, ";") + "m"
+	return prompt.AnsiStyle(codes...)
 }
 
 func visibleWidth(value string) int {
-	return len(historyANSIPattern.ReplaceAllString(value, ""))
+	return prompt.VisibleWidth(value)
 }

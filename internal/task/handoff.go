@@ -75,15 +75,6 @@ func buildHandoffSummary(h *HandoffData) string {
 	return strings.Join(lines, "\n")
 }
 
-func promptField(reader *bufio.Reader, label string) (string, error) {
-	fmt.Printf("%s: ", label)
-	text, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(text), nil
-}
-
 func buildHandoffMarkdown(h HandoffData) string {
 	now := time.Now().Format("2006-01-02 15:04:05 MST")
 

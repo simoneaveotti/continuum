@@ -106,11 +106,11 @@ func TestBootstrapRetainsCriticalContinuumProtocol(t *testing.T) {
 
 	out := string(data)
 	for _, needle := range []string{
-		"## State 0: Session Start (CRITICAL)",
+		"## 0. Session Start",
 		"ctx context --project=%[1]s",
-		"## State 1: Task Check (CRITICAL)",
+		"## 1. Tasks",
 		"ctx list --project=%[1]s",
-		"CONTINUUM_AGENT=<stable-name> ctx task start <task> --project=%[1]s",
+		"ctx task start <task> --project=%[1]s",
 		"CONTINUUM_AGENT=<stable-name> ctx capture <task> --project=%[1]s --type=state --yes",
 		"--type=proposal",
 		"CONTINUUM_AGENT=<stable-name> ctx handoff <task> --project=%[1]s --yes",

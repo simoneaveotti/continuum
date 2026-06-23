@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"continuum/internal/prompt"
 )
 
 func TestParseCaptureArgs(t *testing.T) {
@@ -553,7 +555,7 @@ func TestPadUsageColumn_UsesVisibleWidth(t *testing.T) {
 
 	styled := styleUsageInline("ctx init")
 	padded := padUsageColumn(styled, 12)
-	if got := visibleWidth(padded); got != 12 {
+	if got := prompt.VisibleWidth(padded); got != 12 {
 		t.Fatalf("visibleWidth(padded) = %d, want %d", got, 12)
 	}
 }
@@ -567,7 +569,7 @@ func TestStyleUsageInline_HighlightsFullChoiceFlag(t *testing.T) {
 	if !strings.Contains(got, "active|closed") {
 		t.Fatalf("expected full choice flag to remain visible, got %q", got)
 	}
-	if visibleWidth(got) != len("--status=<active|closed>") {
-		t.Fatalf("unexpected visible width for styled flag: %d", visibleWidth(got))
+	if prompt.VisibleWidth(got) != len("--status=<active|closed>") {
+		t.Fatalf("unexpected visible width for styled flag: %d", prompt.VisibleWidth(got))
 	}
 }

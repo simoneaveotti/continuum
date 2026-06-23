@@ -163,9 +163,6 @@ func Init(projectName string, force bool) error {
 	}
 	PushBestEffort()
 
-	fmt.Printf("Continuum initialized for project '%s'\n", projectName)
-	fmt.Println("Templates: .ctx/templates/")
-	fmt.Println("Edit these files to customize defaults.")
 	return nil
 }
 
@@ -194,9 +191,6 @@ func InitSession(force bool) error {
 	}
 	PushBestEffort()
 
-	fmt.Println("Session initialized.")
-	fmt.Println("Templates: .ctx/templates/")
-	fmt.Println("Run 'ctx project init <project>' to add a project.")
 	return nil
 }
 

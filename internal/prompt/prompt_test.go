@@ -55,6 +55,35 @@ func TestConfirmReaderDoesNotErrorOnEOF(t *testing.T) {
 	}
 }
 
+func TestReadLineReturnsInput(t *testing.T) {
+	r := strings.NewReader("hello world\n")
+	got, err := ReadLineReader(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "hello world" {
+		t.Errorf("ReadLine = %q, want %q", got, "hello world")
+	}
+}
+
+func TestReadLineTrimsCRLF(t *testing.T) {
+	r := strings.NewReader("passphrase\r\n")
+	got, err := ReadLineReader(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "passphrase" {
+		t.Errorf("ReadLine = %q, want %q", got, "passphrase")
+	}
+}
+
+func TestReadLineReturnsErrorOnReadFailure(t *testing.T) {
+	_, err := ReadLineReader(&errReader{errors.New("read error")})
+	if err == nil {
+		t.Fatal("expected error from broken reader")
+	}
+}
+
 type errReader struct{ err error }
 
 func (e *errReader) Read([]byte) (int, error) { return 0, e.err }

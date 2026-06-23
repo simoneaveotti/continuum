@@ -6,11 +6,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/mattn/go-isatty"
+	"continuum/internal/prompt"
 )
 
 var (
-	usageANSIPattern    = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	usageCommandPattern = regexp.MustCompile("(`[^`]+`|ctx\\s+[^\\s].*|--[A-Za-z0-9][A-Za-z0-9<>=,./:_|\\-\\[\\]]*)")
 	usageInlinePattern  = regexp.MustCompile("(`[^`]+`|--[A-Za-z0-9][A-Za-z0-9<>=,./:_|\\-\\[\\]]*)")
 	usageTitleStyle     = ansiStyle("1", "38;5;73")
@@ -200,36 +199,17 @@ func defaultUsageColorsEnabled() bool {
 	if term := os.Getenv("TERM"); term == "" || term == "dumb" {
 		return false
 	}
-	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+	return prompt.IsInteractiveOutput()
 }
 
 func ansiStyle(codes ...string) string {
-	return "\x1b[" + joinStyleCodes(codes...) + "m"
-}
-
-func joinStyleCodes(codes ...string) string {
-	if len(codes) == 0 {
-		return ""
-	}
-	out := codes[0]
-	for _, code := range codes[1:] {
-		out += ";" + code
-	}
-	return out
+	return prompt.AnsiStyle(codes...)
 }
 
 func padUsageColumn(value string, width int) string {
-	visible := visibleWidth(value)
+	visible := prompt.VisibleWidth(value)
 	if visible >= width {
 		return value
 	}
 	return value + strings.Repeat(" ", width-visible)
-}
-
-func visibleWidth(value string) int {
-	return len(stripANSI(value))
-}
-
-func stripANSI(value string) string {
-	return usageANSIPattern.ReplaceAllString(value, "")
 }

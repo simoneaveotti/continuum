@@ -1,7 +1,6 @@
 package export
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
@@ -9,8 +8,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"os"
 	"strings"
+
+	"continuum/internal/prompt"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -136,21 +136,9 @@ func deriveKeyArgon2(passphrase string, salt []byte, timeCost, memoryCost uint32
 }
 
 func promptPassphrase() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter passphrase: ")
-	pass, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-	return pass[:len(pass)-1], nil
+	return prompt.ReadLine("Enter passphrase: ")
 }
 
 func promptDecryptPassphrase() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter decryption passphrase: ")
-	pass, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-	return pass[:len(pass)-1], nil
+	return prompt.ReadLine("Enter decryption passphrase: ")
 }

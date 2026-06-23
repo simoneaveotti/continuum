@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -18,13 +19,19 @@ import (
 	"continuum/internal/skill"
 	"continuum/internal/task"
 	"continuum/internal/template"
-
-	"github.com/mattn/go-isatty"
 )
 
 // die prints an error to stderr and exits with code 1.
 func die(err error) {
 	fmt.Fprintln(os.Stderr, "Error:", err)
+	os.Exit(1)
+}
+
+// dieUsage prints usage message(s) to stderr and exits with code 1.
+func dieUsage(lines ...string) {
+	for _, line := range lines {
+		fmt.Fprintln(os.Stderr, line)
+	}
 	os.Exit(1)
 }
 
@@ -59,7 +66,7 @@ func handleInit(args []string) {
 		template.SetSourcePath(templatesPath)
 	}
 	if projectName != "" {
-		die(fmt.Errorf("Usage: ctx init [--templates=<path>] [--remote=<url>] [--force]"))
+		dieUsage(initUsage)
 	}
 
 	if remote != "" {
@@ -72,6 +79,9 @@ func handleInit(args []string) {
 	if err := setup.InitSession(force); err != nil {
 		die(err)
 	}
+	fmt.Println("Session initialized.")
+	fmt.Println("Templates: .ctx/templates/")
+	fmt.Println("Run 'ctx project init <project>' to add a project.")
 }
 
 func handleProjectList() {
@@ -93,8 +103,7 @@ func handleProjectList() {
 
 func handleCapture(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx capture <task> --project=<name> [--type=state|proposal|request|response|decision] [--resolves=<filename>] [--yes]")
-		os.Exit(1)
+		dieUsage(captureUsage)
 	}
 	taskName, project, captureTypeValue, resolves, autoConfirm := parseCaptureArgs(args)
 	project = resolveProject(project)
@@ -202,8 +211,7 @@ func confirmSyncPreference(prefer string) (bool, error) {
 
 func handleRepair(args []string) {
 	if len(args) > 1 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx repair [--activity]")
-		os.Exit(1)
+		dieUsage("Usage: ctx repair [--activity]")
 	}
 	msg := ""
 	var err error
@@ -213,8 +221,7 @@ func handleRepair(args []string) {
 	case args[0] == "--activity":
 		msg, err = setup.RepairActivityLog()
 	default:
-		fmt.Fprintln(os.Stderr, "Usage: ctx repair [--activity]")
-		os.Exit(1)
+		dieUsage("Usage: ctx repair [--activity]")
 	}
 	if err != nil {
 		die(err)
@@ -227,8 +234,7 @@ func handleRepair(args []string) {
 
 func handleResume(args []string) {
 	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx resume")
-		os.Exit(1)
+		dieUsage("Usage: ctx resume")
 	}
 
 	result, err := setup.Resume()
@@ -312,9 +318,7 @@ func handleSearch(args []string) {
 
 func handleArtifact(args []string) {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx artifact list <task> [--project=<name>] [--type=proposal|request|response|decision|all]")
-		fmt.Fprintln(os.Stderr, "       ctx artifact show <task> <filename> [--project=<name>]")
-		os.Exit(1)
+		dieUsage(artifactListUsage, artifactShowUsage)
 	}
 
 	switch args[0] {
@@ -342,15 +346,13 @@ func handleArtifact(args []string) {
 		fmt.Print(content)
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown artifact subcommand:", args[0])
-		fmt.Fprintln(os.Stderr, "Usage: ctx artifact list|show <task> [filename] [--project=<name>]")
-		os.Exit(1)
+		dieUsage(artifactListUsage, artifactShowUsage)
 	}
 }
 
 func handleResolve(args []string) {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx resolve <task> <filename> [--project=<name>]")
-		os.Exit(1)
+		dieUsage(resolveUsage)
 	}
 	taskName, project, filename := parseArtifactFileArgs(args)
 	project = resolveProject(project)
@@ -414,23 +416,19 @@ func handleDiff(args []string) {
 
 func handleAgent(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx agent install --project=<name> [--force]")
-		fmt.Fprintln(os.Stderr, "       ctx agent status [--project=<name>]")
-		fmt.Fprintln(os.Stderr, "       ctx agent update [--project=<name>]")
-		fmt.Fprintln(os.Stderr, "       ctx agent remove [--project=<name>]")
-		os.Exit(1)
+		dieUsage(agentUsage...)
 	}
 
 	switch args[0] {
 	case "install":
 		projectName, force := parseAgentInstallArgs(args[1:])
 		if projectName == "" {
-			fmt.Fprintln(os.Stderr, "Usage: ctx agent install --project=<name> [--force]")
-			os.Exit(1)
+			dieUsage(agentInstallUsage)
 		}
 		if err := agent.Install(projectName, force); err != nil {
 			die(err)
 		}
+		fmt.Printf("Installed Continuum bootstrap (project: %s).\n", projectName)
 	case "status":
 		projectName, _, err := parseAgentProjectArgs(args[1:])
 		if err != nil {
@@ -448,27 +446,25 @@ func handleAgent(args []string) {
 			die(err)
 		}
 		projectName = resolveAgentProject("update", projectName)
-		if err := agent.Update(projectName, force); err != nil {
+		msg, err := agent.Update(projectName, force)
+		if err != nil {
 			die(err)
 		}
+		fmt.Println(msg)
 	case "remove":
 		for _, arg := range args[1:] {
 			if _, ok := parseFlag(arg, "--project="); ok {
 				continue
 			}
-			fmt.Fprintln(os.Stderr, "Usage: ctx agent remove [--project=<name>]")
-			os.Exit(1)
+			dieUsage(agentRemoveUsage)
 		}
 		if err := agent.Remove(); err != nil {
 			die(err)
 		}
+		fmt.Println("Removed Continuum bootstrap.")
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown agent command.")
-		fmt.Fprintln(os.Stderr, "Usage: ctx agent install --project=<name> [--force]")
-		fmt.Fprintln(os.Stderr, "       ctx agent status [--project=<name>]")
-		fmt.Fprintln(os.Stderr, "       ctx agent update [--project=<name>]")
-		fmt.Fprintln(os.Stderr, "       ctx agent remove [--project=<name>]")
-		os.Exit(1)
+		dieUsage(agentUsage...)
 	}
 }
 
@@ -497,9 +493,8 @@ func printAgentStatus(checks []agent.BootstrapCheck) {
 
 func handleExport(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx export [<task> | --project=<name[,name2...]> | --session] [--path=<destination>] [--encrypt[=<algo>]]")
-		fmt.Fprintln(os.Stderr, "  Supported algorithms: aes-gcm-v2")
-		os.Exit(1)
+		dieUsage("Usage: ctx export [<task> | --project=<name[,name2...]> | --session] [--path=<destination>] [--encrypt[=<algo>]]",
+			"  Supported algorithms: aes-gcm-v2")
 	}
 
 	projects, taskName, customPath, encryptAlgo, session, err := parseExportArgs(args)
@@ -515,8 +510,7 @@ func handleExport(args []string) {
 	var outputPath string
 	if encryptAlgo != "" {
 		if !encryptAlgo.Valid() {
-			fmt.Fprintln(os.Stderr, "Error: invalid algorithm:", encryptAlgo)
-			os.Exit(1)
+			die(fmt.Errorf("invalid algorithm: %s", encryptAlgo))
 		}
 		switch {
 		case session:
@@ -544,17 +538,15 @@ func handleExport(args []string) {
 
 func handleImport(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx import <zip-path> [--decrypt[=<algo>]]")
-		fmt.Fprintln(os.Stderr, "  Example: ctx import task.zip")
-		fmt.Fprintln(os.Stderr, "  Example: ctx import task.zip.enc --decrypt")
-		fmt.Fprintln(os.Stderr, "  Supported algorithms for decrypt: aes-gcm-v2")
-		os.Exit(1)
+		dieUsage("Usage: ctx import <zip-path> [--decrypt[=<algo>]]",
+			"  Example: ctx import task.zip",
+			"  Example: ctx import task.zip.enc --decrypt",
+			"  Supported algorithms for decrypt: aes-gcm-v2")
 	}
 
 	zipPath, decrypt, algo := parseImportArgs(args)
 	if decrypt && !algo.Valid() {
-		fmt.Fprintln(os.Stderr, "Error: invalid algorithm:", algo)
-		os.Exit(1)
+		die(fmt.Errorf("invalid algorithm: %s", algo))
 	}
 
 	target, err := export.ImportArchive(zipPath, decrypt, algo)
@@ -566,8 +558,7 @@ func handleImport(args []string) {
 
 func handleHandoff(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx handoff <task> [--project=<name>] [--yes]")
-		os.Exit(1)
+		dieUsage(handoffUsage)
 	}
 	taskName, project, autoConfirm := parseTaskArgs(args)
 	project = resolveProject(project)
@@ -604,8 +595,7 @@ func handleList(args []string) {
 
 func handleTask(args []string) {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx task start <task> [--project=<name>]")
-		os.Exit(1)
+		dieUsage(taskUsage...)
 	}
 
 	subcommand := args[0]
@@ -620,6 +610,8 @@ func handleTask(args []string) {
 		}
 		if result == task.StartAlreadyActive {
 			fmt.Printf("Task '%s' is already active in project '%s'; no changes made.\n", taskName, project)
+		} else {
+			fmt.Printf("Task '%s' initialized in project '%s'.\n", taskName, project)
 		}
 	case "close":
 		changed, err := task.SetStatus(taskName, project, task.StatusClosed)
@@ -648,18 +640,13 @@ func handleTask(args []string) {
 		fmt.Printf("Task '%s' removed from project '%s'.\n", taskName, project)
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown task subcommand:", subcommand)
-		fmt.Fprintln(os.Stderr, "Usage: ctx task start|close|reopen|delete <task> [--project=<name>]")
-		os.Exit(1)
+		dieUsage(taskUsage...)
 	}
 }
 
 func handleProject(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx project list")
-		fmt.Fprintln(os.Stderr, "       ctx project init <project>")
-		fmt.Fprintln(os.Stderr, "       ctx project onboard <project>")
-		fmt.Fprintln(os.Stderr, "       ctx project delete <project>")
-		os.Exit(1)
+		dieUsage(projectUsage...)
 	}
 
 	subcommand := args[0]
@@ -667,26 +654,26 @@ func handleProject(args []string) {
 	switch subcommand {
 	case "list":
 		if len(args) != 1 {
-			fmt.Fprintln(os.Stderr, "Usage: ctx project list")
-			os.Exit(1)
+			dieUsage("Usage: ctx project list")
 		}
 		handleProjectList()
 	case "init":
 		project, err := parseProjectCommandArgs(args[1:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Usage: ctx project init <project>")
-			os.Exit(1)
+			dieUsage("Usage: ctx project init <project>")
 		}
 		if err := setup.Init(project, false); err != nil {
 			die(err)
 		}
+		fmt.Printf("Continuum initialized for project '%s'.\n", project)
+		fmt.Println("Templates: .ctx/templates/")
+		fmt.Println("Edit these files to customize defaults.")
 	case "onboard":
 		project, force, autoConfirm, err := parseProjectOnboardArgs(args[1:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Usage: ctx project onboard <project> [--force] [--yes]")
-			os.Exit(1)
+			dieUsage(projectOnboardUsage)
 		}
-		content, _, err := readProjectOnboardContent()
+		content, err := readProjectOnboardContent()
 		if err != nil {
 			die(err)
 		}
@@ -698,8 +685,7 @@ func handleProject(args []string) {
 	case "delete":
 		project, err := parseProjectCommandArgs(args[1:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Usage: ctx project delete <project>")
-			os.Exit(1)
+			dieUsage("Usage: ctx project delete <project>")
 		}
 		if err := setup.DeleteProject(project); err != nil {
 			die(err)
@@ -707,21 +693,19 @@ func handleProject(args []string) {
 		fmt.Printf("Project '%s' removed.\n", project)
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown project subcommand:", subcommand)
-		fmt.Fprintln(os.Stderr, "Usage: ctx project list|init|onboard|delete ...")
-		os.Exit(1)
+		dieUsage(projectUsage...)
 	}
 }
 
-func readProjectOnboardContent() ([]byte, bool, error) {
-	piped := !isatty.IsTerminal(os.Stdin.Fd()) && !isatty.IsCygwinTerminal(os.Stdin.Fd())
-	if !piped {
-		return nil, false, fmt.Errorf("ctx project onboard expects markdown on stdin")
+func readProjectOnboardContent() ([]byte, error) {
+	if prompt.IsInteractiveInput() {
+		return nil, fmt.Errorf("ctx project onboard expects markdown on stdin")
 	}
 	content, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		return nil, true, fmt.Errorf("cannot read onboarding content: %w", err)
+		return nil, fmt.Errorf("cannot read onboarding content: %w", err)
 	}
-	return content, true, nil
+	return content, nil
 }
 
 func confirmProjectOnboard(project, content string, autoConfirm bool, save func() error) error {
@@ -753,8 +737,7 @@ func confirmProjectOnboard(project, content string, autoConfirm bool, save func(
 
 func handleSnapshot(args []string) {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx snapshot refresh|clean <task> [--project=<name>] [--yes] [--keep=N]")
-		os.Exit(1)
+		dieUsage(snapshotUsage)
 	}
 
 	subcommand := args[0]
@@ -771,8 +754,7 @@ func handleSnapshot(args []string) {
 		}
 	case "clean":
 		if taskName == "" {
-			fmt.Fprintln(os.Stderr, "Usage: ctx snapshot clean <task>")
-			os.Exit(1)
+			dieUsage("Usage: ctx snapshot clean <task>")
 		}
 		removed, err := task.SnapshotClean(taskName, project, keep)
 		if err != nil {
@@ -784,8 +766,7 @@ func handleSnapshot(args []string) {
 			fmt.Printf("Snapshots cleaned: %d. Kept latest %d.\n", removed, keep)
 		}
 	default:
-		fmt.Fprintln(os.Stderr, "Usage: ctx snapshot refresh <task>")
-		os.Exit(1)
+		dieUsage("Usage: ctx snapshot refresh <task>")
 	}
 }
 
@@ -793,24 +774,51 @@ func skillsBasePath() string {
 	return setup.ResolvePath("skills")
 }
 
+var skillUsage = []string{
+	"Usage: ctx skill <command> [options]",
+	"Commands: list, show, save, delete",
+	"  ctx skill list [--json]",
+	"  ctx skill show <name> [--json]",
+	"  ctx skill save <name> [--description=<text>] [--yes]",
+	"  ctx skill delete <name> [--yes]",
+}
+
 func handleSkill(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx skill list")
-		fmt.Fprintln(os.Stderr, "       ctx skill show <name>")
-		fmt.Fprintln(os.Stderr, "       ctx skill save <name> [--yes]")
-		os.Exit(1)
+	if len(args) < 1 || args[0] == "--help" || args[0] == "-h" {
+		dieUsage(skillUsage...)
 	}
 
 	switch args[0] {
 	case "list":
+		useJSON := false
+		for _, arg := range args[1:] {
+			if arg == "--json" {
+				useJSON = true
+			} else {
+				dieUsage("Usage: ctx skill list [--json]")
+			}
+		}
+
 		entries, fromIndex, err := skill.ListWithDescriptions(skillsBasePath())
 		if err != nil {
 			die(err)
 		}
 		if len(entries) == 0 {
-			fmt.Println("No skills found. Use ctx skill save <name> to create one.")
+			if useJSON {
+				fmt.Println("[]")
+			} else {
+				fmt.Println("No skills found. Use ctx skill save <name> to create one.")
+			}
 			return
 		}
+
+		if useJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			enc.Encode(entries)
+			return
+		}
+
 		if fromIndex {
 			maxLen := 0
 			for _, e := range entries {
@@ -833,21 +841,41 @@ func handleSkill(args []string) {
 
 	case "show":
 		if len(args) < 2 {
-			fmt.Fprintln(os.Stderr, "Usage: ctx skill show <name>")
-			os.Exit(1)
+			dieUsage("Usage: ctx skill show <name>")
+		}
+		if strings.HasPrefix(args[1], "--") {
+			dieUsage("Usage: ctx skill show <name>")
 		}
 		name := args[1]
+		useJSON := false
+		for _, arg := range args[2:] {
+			if arg == "--json" {
+				useJSON = true
+			} else {
+				dieUsage("Usage: ctx skill show <name> [--json]")
+			}
+		}
+
 		content, err := skill.Show(skillsBasePath(), name)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
-			os.Exit(1)
+			die(err)
+		}
+
+		if useJSON {
+			json.NewEncoder(os.Stdout).Encode(struct {
+				Name    string `json:"name"`
+				Content string `json:"content"`
+			}{name, content})
+			return
 		}
 		fmt.Print(content)
 
 	case "save":
 		if len(args) < 2 {
-			fmt.Fprintln(os.Stderr, "Usage: ctx skill save <name> [--description=<text>] [--yes]")
-			os.Exit(1)
+			dieUsage("Usage: ctx skill save <name> [--description=<text>] [--yes]")
+		}
+		if strings.HasPrefix(args[1], "--") {
+			dieUsage("Usage: ctx skill save <name> [--description=<text>] [--yes]")
 		}
 		name := args[1]
 		autoConfirm := false
@@ -858,8 +886,7 @@ func handleSkill(args []string) {
 			} else if val, ok := parseFlag(arg, "--description="); ok {
 				description = val
 			} else {
-				fmt.Fprintln(os.Stderr, "Usage: ctx skill save <name> [--description=<text>] [--yes]")
-				os.Exit(1)
+				dieUsage("Usage: ctx skill save <name> [--description=<text>] [--yes]")
 			}
 		}
 
@@ -867,10 +894,12 @@ func handleSkill(args []string) {
 		if err != nil {
 			die(fmt.Errorf("cannot read skill content: %w", err))
 		}
+		if len(strings.TrimSpace(string(content))) == 0 {
+			die(fmt.Errorf("skill content cannot be empty"))
+		}
 
 		base := skillsBasePath()
 
-		// migrate agent.md → index.md on first save if needed
 		if migrated, err := skill.MigrateAgentToIndex(base); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: skills index migration failed: %v\n", err)
 		} else if migrated {
@@ -900,8 +929,10 @@ func handleSkill(args []string) {
 
 	case "delete":
 		if len(args) < 2 {
-			fmt.Fprintln(os.Stderr, "Usage: ctx skill delete <name> [--yes]")
-			os.Exit(1)
+			dieUsage("Usage: ctx skill delete <name> [--yes]")
+		}
+		if strings.HasPrefix(args[1], "--") {
+			dieUsage("Usage: ctx skill delete <name> [--yes]")
 		}
 		name := args[1]
 		autoConfirm := false
@@ -909,8 +940,7 @@ func handleSkill(args []string) {
 			if arg == "--yes" {
 				autoConfirm = true
 			} else {
-				fmt.Fprintln(os.Stderr, "Usage: ctx skill delete <name> [--yes]")
-				os.Exit(1)
+				dieUsage("Usage: ctx skill delete <name> [--yes]")
 			}
 		}
 
@@ -926,29 +956,25 @@ func handleSkill(args []string) {
 		}
 
 		if err := skill.Delete(skillsBasePath(), name); err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
-			os.Exit(1)
+			die(err)
 		}
 		fmt.Printf("Skill %q deleted.\n", name)
 
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown skill subcommand:", args[0])
-		fmt.Fprintln(os.Stderr, "Usage: ctx skill list|show|save|delete ...")
-		os.Exit(1)
+		dieUsage(skillUsage...)
 	}
 }
 
 func handleConfig(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: ctx config set host <name>")
-		os.Exit(1)
+		dieUsage(configSetUsage)
 	}
 	switch args[0] {
 	case "set":
 		key, value, err := parseConfigSetArgs(args[1:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
-			os.Exit(1)
+			die(err)
 		}
 		switch key {
 		case "host":
@@ -957,12 +983,10 @@ func handleConfig(args []string) {
 			}
 			fmt.Printf("Continuum host set to %q.\n", value)
 		default:
-			fmt.Fprintln(os.Stderr, "Usage: ctx config set host <name>")
-			os.Exit(1)
+			dieUsage(configSetUsage)
 		}
 	default:
-		fmt.Fprintln(os.Stderr, "Usage: ctx config set host <name>")
-		os.Exit(1)
+		dieUsage(configSetUsage)
 	}
 }
 
@@ -1017,6 +1041,6 @@ func dispatchCommand(command string, args []string) {
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown command:", command)
 		printUsage()
-		os.Exit(1)
+		os.Exit(1) // printUsage already prints instructions
 	}
 }

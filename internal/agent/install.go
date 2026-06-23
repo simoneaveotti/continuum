@@ -64,20 +64,17 @@ func Install(project string, force bool) error {
 
 	for _, filename := range targetFiles {
 		if err := installToFile(filename, project, force); err != nil {
-			fmt.Printf("Skipping %s: %v\n", filename, err)
+			fmt.Fprintf(os.Stderr, "Skipping %s: %v\n", filename, err)
 			continue
 		}
 		installed++
 	}
 
 	if installed == 0 {
-		fmt.Println("No agent instruction files found.")
-		fmt.Println("Create one of: AGENTS.md, CLAUDE.md, agent.md")
-		return nil
+		return fmt.Errorf("no agent instruction files found — create one of: AGENTS.md, CLAUDE.md, agent.md")
 	}
 
 	_ = events.Append(project, "", "agent_install", "ok", fmt.Sprintf("%d file(s)", installed))
-	fmt.Printf("Installed Continuum bootstrap (project: %s) to %d file(s).\n", project, installed)
 	return nil
 }
 
@@ -98,22 +95,24 @@ func Status(project string) ([]BootstrapCheck, error) {
 	return checks, nil
 }
 
-func Update(project string, force bool) error {
+func Update(project string, force bool) (string, error) {
 	if err := setup.ValidateProjectName(project); err != nil {
-		return err
+		return "", err
 	}
 	checks, err := Status(project)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !force && !needsUpdate(checks) {
-		fmt.Println("Agent bootstrap already current.")
-		return nil
+		return "Agent bootstrap already current.", nil
 	}
 	if err := setup.InitSession(true); err != nil {
-		return err
+		return "", err
 	}
-	return Install(project, true)
+	if err := Install(project, true); err != nil {
+		return "", err
+	}
+	return "Agent bootstrap updated.", nil
 }
 
 func needsUpdate(checks []BootstrapCheck) bool {
@@ -209,7 +208,6 @@ func installToFile(filename, project string, force bool) error {
 
 	if strings.Contains(existing, MarkerStart) && strings.Contains(existing, MarkerEnd) {
 		if !force {
-			fmt.Printf("%s: already has Continuum bootstrap (skipping)\n", filename)
 			return nil
 		}
 		start := strings.Index(existing, MarkerStart)
@@ -230,7 +228,6 @@ func installToFile(filename, project string, force bool) error {
 		return fmt.Errorf("cannot write: %w", err)
 	}
 
-	fmt.Printf("%s: added Continuum bootstrap\n", filename)
 	return nil
 }
 
@@ -250,12 +247,10 @@ func Remove() error {
 	}
 
 	if removed == 0 {
-		fmt.Println("No Continuum bootstrap found to remove.")
-		return nil
+		return fmt.Errorf("no Continuum bootstrap found to remove")
 	}
 
 	_ = events.Append("", "", "agent_remove", "ok", fmt.Sprintf("%d file(s)", removed))
-	fmt.Printf("Removed Continuum bootstrap from %d file(s).\n", removed)
 	return nil
 }
 
@@ -283,6 +278,5 @@ func removeFromFile(filename string) error {
 		return err
 	}
 
-	fmt.Printf("%s: removed Continuum bootstrap\n", filename)
 	return nil
 }

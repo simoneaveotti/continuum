@@ -13,8 +13,8 @@ const indexHeader = "# Skills Index\n"
 
 // IndexEntry holds a skill name and its one-line description.
 type IndexEntry struct {
-	Name        string
-	Description string
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 // ParseIndex parses the content of an index.md file into entries.

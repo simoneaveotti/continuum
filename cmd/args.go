@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -18,6 +19,8 @@ func parseFlag(arg, prefix string) (string, bool) {
 	val := arg[len(prefix):]
 	return val, true
 }
+
+var captureUsage = "Usage: ctx capture <task> --project=<name> [--type=state|proposal|request|response|decision] [--resolves=<filename>] [--yes]"
 
 func parseCaptureArgs(args []string) (taskName, project, captureType, resolves string, autoConfirm bool) {
 	captureType = "state"
@@ -37,6 +40,8 @@ func parseCaptureArgs(args []string) (taskName, project, captureType, resolves s
 	return taskName, project, captureType, resolves, autoConfirm
 }
 
+var handoffUsage = "Usage: ctx handoff <task> [--project=<name>] [--yes]"
+
 func parseTaskArgs(args []string) (taskName, project string, autoConfirm bool) {
 	for _, arg := range args {
 		if val, ok := parseFlag(arg, "--project="); ok {
@@ -49,6 +54,9 @@ func parseTaskArgs(args []string) (taskName, project string, autoConfirm bool) {
 	}
 	return taskName, project, autoConfirm
 }
+
+var artifactListUsage = "Usage: ctx artifact list <task> [--project=<name>] [--type=proposal|request|response|decision|all]"
+var artifactShowUsage = "       ctx artifact show <task> <filename> [--project=<name>]"
 
 func parseArtifactListArgs(args []string) (taskName, project, captureType string) {
 	captureType = "all"
@@ -64,6 +72,8 @@ func parseArtifactListArgs(args []string) (taskName, project, captureType string
 	return taskName, project, captureType
 }
 
+var resolveUsage = "Usage: ctx resolve <task> <filename> [--project=<name>]"
+
 func parseArtifactFileArgs(args []string) (taskName, project, filename string) {
 	for _, arg := range args {
 		if val, ok := parseFlag(arg, "--project="); ok {
@@ -76,6 +86,8 @@ func parseArtifactFileArgs(args []string) (taskName, project, filename string) {
 	}
 	return taskName, project, filename
 }
+
+var initUsage = "Usage: ctx init [--templates=<path>] [--remote=<url>] [--force]"
 
 func parseInitArgs(args []string) (projectName, templatesPath string, force bool, remote string) {
 	for _, arg := range args {
@@ -105,6 +117,8 @@ func parseContextArgs(args []string) (project, taskName string, compact bool) {
 	return project, taskName, compact
 }
 
+var syncUsage = "Usage: ctx sync [--remote=<url>] [--prefer=local|remote] [--force]"
+
 func parseSyncArgs(args []string) (remote, prefer string, force bool, err error) {
 	for _, arg := range args {
 		if val, ok := parseFlag(arg, "--remote="); ok {
@@ -114,17 +128,19 @@ func parseSyncArgs(args []string) (remote, prefer string, force bool, err error)
 		} else if arg == "--force" {
 			force = true
 		} else {
-			return "", "", false, fmt.Errorf("Usage: ctx sync [--remote=<url>] [--prefer=local|remote] [--force]")
+			return "", "", false, errors.New(syncUsage)
 		}
 	}
 	if prefer != "" && prefer != "local" && prefer != "remote" {
 		return "", "", false, fmt.Errorf("invalid --prefer value: %q (expected local or remote)", prefer)
 	}
 	if force && prefer == "" {
-		return "", "", false, fmt.Errorf("Usage: ctx sync [--remote=<url>] [--prefer=local|remote] [--force]")
+		return "", "", false, errors.New(syncUsage)
 	}
 	return remote, prefer, force, nil
 }
+
+var watchUsage = "Usage: ctx watch [--project=<name>] [--interval=<duration>] [--tui]"
 
 func parseWatchArgs(args []string) (project string, interval time.Duration, tui bool, err error) {
 	interval = 2 * time.Second
@@ -140,7 +156,7 @@ func parseWatchArgs(args []string) (project string, interval time.Duration, tui 
 			}
 			interval = parsed
 		} else {
-			return "", 0, false, fmt.Errorf("Usage: ctx watch [--project=<name>] [--interval=<duration>] [--tui]")
+			return "", 0, false, errors.New(watchUsage)
 		}
 	}
 	return project, interval, tui, nil
@@ -150,6 +166,8 @@ func parseSearchArgs(args []string) (project, taskName, query string, err error)
 	project, taskName, query, _, _, err = parseSearchArgsFull(args)
 	return project, taskName, query, err
 }
+
+var historyUsage = "Usage: ctx history [--project=<name>] [--task=<name>] [--limit=<n>] [--since=<duration>]"
 
 func parseHistoryArgs(args []string) (project, taskName string, limit int, since time.Duration, err error) {
 	for _, arg := range args {
@@ -170,11 +188,13 @@ func parseHistoryArgs(args []string) (project, taskName string, limit int, since
 			}
 			since = parsed
 		} else {
-			return "", "", 0, 0, fmt.Errorf("Usage: ctx history [--project=<name>] [--task=<name>] [--limit=<n>] [--since=<duration>]")
+			return "", "", 0, 0, errors.New(historyUsage)
 		}
 	}
 	return project, taskName, limit, since, nil
 }
+
+var diffUsage = "Usage: ctx diff <task> [<from-snapshot> <to-snapshot>] [--project=<name>]"
 
 func parseDiffArgs(args []string) (project, taskName, fromName, toName string, err error) {
 	for _, arg := range args {
@@ -187,11 +207,11 @@ func parseDiffArgs(args []string) (project, taskName, fromName, toName string, e
 		} else if toName == "" {
 			toName = arg
 		} else {
-			return "", "", "", "", fmt.Errorf("Usage: ctx diff <task> [<from-snapshot> <to-snapshot>] [--project=<name>]")
+			return "", "", "", "", errors.New(diffUsage)
 		}
 	}
 	if taskName == "" {
-		return "", "", "", "", fmt.Errorf("Usage: ctx diff <task> [<from-snapshot> <to-snapshot>] [--project=<name>]")
+		return "", "", "", "", errors.New(diffUsage)
 	}
 	if (fromName == "" && toName != "") || (fromName != "" && toName == "") {
 		return "", "", "", "", fmt.Errorf("provide both snapshot names or neither")
@@ -203,6 +223,8 @@ func parseSearchArgsWithLimit(args []string) (project, taskName, query string, l
 	project, taskName, query, limit, _, err = parseSearchArgsFull(args)
 	return project, taskName, query, limit, err
 }
+
+var searchUsage = "Usage: ctx search [--project=<name>] [--task=<name>] [--limit=<n>] [--since=<duration>] <query>"
 
 func parseSearchArgsFull(args []string) (project, taskName, query string, limit int, since time.Duration, err error) {
 	var queryParts []string
@@ -229,7 +251,7 @@ func parseSearchArgsFull(args []string) (project, taskName, query string, limit 
 	}
 	query = strings.TrimSpace(strings.Join(queryParts, " "))
 	if query == "" {
-		return "", "", "", 0, 0, fmt.Errorf("Usage: ctx search [--project=<name>] [--task=<name>] [--limit=<n>] [--since=<duration>] <query>")
+		return "", "", "", 0, 0, errors.New(searchUsage)
 	}
 	return project, taskName, query, limit, since, nil
 }
@@ -249,6 +271,9 @@ func parseSinceValue(val string) (time.Duration, error) {
 	return parsed, nil
 }
 
+var agentInstallUsage = "Usage: ctx agent install [--project=<name>] [--force]"
+var agentRemoveUsage = "Usage: ctx agent remove [--project=<name>]"
+
 func parseAgentInstallArgs(args []string) (projectName string, force bool) {
 	for _, arg := range args {
 		if arg == "--force" {
@@ -258,6 +283,15 @@ func parseAgentInstallArgs(args []string) (projectName string, force bool) {
 		}
 	}
 	return projectName, force
+}
+
+var agentProjectUsage = "Usage: ctx agent status [--project=<name>]\n       ctx agent update [--project=<name>] [--force]"
+
+var agentUsage = []string{
+	"Usage: ctx agent <command> [options]",
+	"Commands: status, update, install",
+	"  ctx agent status [--project=<name>]",
+	"  ctx agent update [--project=<name>] [--force]",
 }
 
 func parseAgentProjectArgs(args []string) (projectName string, force bool, err error) {
@@ -270,14 +304,16 @@ func parseAgentProjectArgs(args []string) (projectName string, force bool, err e
 			force = true
 			continue
 		}
-		return "", false, fmt.Errorf("Usage: ctx agent status [--project=<name>]\n       ctx agent update [--project=<name>] [--force]")
+		return "", false, errors.New(agentProjectUsage)
 	}
 	return projectName, force, nil
 }
 
+var configSetUsage = "Usage: ctx config set host <name>"
+
 func parseConfigSetArgs(args []string) (key, value string, err error) {
 	if len(args) != 2 {
-		return "", "", fmt.Errorf("Usage: ctx config set host <name>")
+		return "", "", errors.New(configSetUsage)
 	}
 	return args[0], args[1], nil
 }
@@ -292,6 +328,8 @@ func parseProjectsValue(value string) []string {
 	}
 	return items
 }
+
+var exportUsage = "Usage: ctx export [<task> | --project=<name[,name2...]> | --session] [--path=<destination>] [--encrypt[=<algo>]]"
 
 func parseExportArgs(args []string) (projects []string, taskName, customPath string, encryptAlgo export.EncryptionAlgo, session bool, err error) {
 	for _, arg := range args {
@@ -308,7 +346,7 @@ func parseExportArgs(args []string) (projects []string, taskName, customPath str
 		} else if taskName == "" {
 			taskName = arg
 		} else {
-			return nil, "", "", "", false, fmt.Errorf("Usage: ctx export [<task> | --project=<name[,name2...]> | --session] [--path=<destination>] [--encrypt[=<algo>]]")
+			return nil, "", "", "", false, errors.New(exportUsage)
 		}
 	}
 	if session && (taskName != "" || len(projects) > 0) {
@@ -318,10 +356,12 @@ func parseExportArgs(args []string) (projects []string, taskName, customPath str
 		return nil, "", "", "", false, fmt.Errorf("task export accepts at most one project")
 	}
 	if taskName == "" && !session && len(projects) == 0 {
-		return nil, "", "", "", false, fmt.Errorf("Usage: ctx export [<task> | --project=<name[,name2...]> | --session] [--path=<destination>] [--encrypt[=<algo>]]")
+		return nil, "", "", "", false, errors.New(exportUsage)
 	}
 	return projects, taskName, customPath, encryptAlgo, session, nil
 }
+
+var importUsage = "Usage: ctx import <path> [--decrypt[=<algo>]]"
 
 func parseImportArgs(args []string) (zipPath string, decrypt bool, algo export.EncryptionAlgo) {
 	if len(args) > 0 {
@@ -338,6 +378,8 @@ func parseImportArgs(args []string) (zipPath string, decrypt bool, algo export.E
 	return zipPath, decrypt, algo
 }
 
+var listUsage = "Usage: ctx list [--project=<name>] [--all | --status=<active|closed>]"
+
 func parseListArgs(args []string) (project, status string, err error) {
 	for _, arg := range args {
 		if val, ok := parseFlag(arg, "--project="); ok {
@@ -347,10 +389,15 @@ func parseListArgs(args []string) (project, status string, err error) {
 		} else if arg == "--all" {
 			status = "all"
 		} else {
-			return "", "", fmt.Errorf("Usage: ctx list [--project=<name>] [--all | --status=<active|closed>]")
+			return "", "", errors.New(listUsage)
 		}
 	}
 	return project, status, nil
+}
+
+var taskUsage = []string{
+	"Usage: ctx task <command> [options]",
+	"Commands: start, close, list, show",
 }
 
 func parseTaskCommandArgs(args []string) (project, taskName string) {
@@ -364,6 +411,11 @@ func parseTaskCommandArgs(args []string) (project, taskName string) {
 	return project, taskName
 }
 
+var projectUsage = []string{
+	"Usage: ctx project <command> [options]",
+	"Commands: list, delete, onboard, init",
+}
+
 func parseProjectCommandArgs(args []string) (string, error) {
 	if len(args) != 1 {
 		return "", fmt.Errorf("expected exactly one project name")
@@ -374,6 +426,8 @@ func parseProjectCommandArgs(args []string) (string, error) {
 	return args[0], nil
 }
 
+var projectOnboardUsage = "Usage: ctx project onboard <project> [--force] [--yes]"
+
 func parseProjectOnboardArgs(args []string) (project string, force bool, autoConfirm bool, err error) {
 	for _, arg := range args {
 		if arg == "--force" {
@@ -381,18 +435,20 @@ func parseProjectOnboardArgs(args []string) (project string, force bool, autoCon
 		} else if arg == "--yes" {
 			autoConfirm = true
 		} else if strings.HasPrefix(arg, "--") {
-			return "", false, false, fmt.Errorf("Usage: ctx project onboard <project> [--force] [--yes]")
+			return "", false, false, errors.New(projectOnboardUsage)
 		} else if project == "" {
 			project = arg
 		} else {
-			return "", false, false, fmt.Errorf("Usage: ctx project onboard <project> [--force] [--yes]")
+			return "", false, false, errors.New(projectOnboardUsage)
 		}
 	}
 	if project == "" {
-		return "", false, false, fmt.Errorf("Usage: ctx project onboard <project> [--force] [--yes]")
+		return "", false, false, errors.New(projectOnboardUsage)
 	}
 	return project, force, autoConfirm, nil
 }
+
+var snapshotUsage = "Usage: ctx snapshot <task> [--project=<name>] [--keep=<n>] [--yes]"
 
 func parseSnapshotArgs(args []string) (project, taskName string, autoConfirm bool, keep int, err error) {
 	keep = 10

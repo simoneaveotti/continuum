@@ -1,3 +1,4 @@
+
 <!-- CONTINUUM:START -->
 <!-- do not remove or modify the %[1]s placeholders — they are replaced by ctx agent install -->
 <!-- CONTINUUM:BOOTSTRAP_VERSION %[2]s -->
@@ -6,183 +7,104 @@ This workspace uses Continuum for agent continuity.
 Default Continuum project: %[1]s
 
 Continuum instructions are an execution protocol, not background context.
-Follow the states below in order, even for simple requests.
+Follow the flow below, even for simple requests.
 
-Continuum storage lives outside this workspace.
-The default location is `~/.ctx/`, but it may be overridden with `CONTINUUM_PATH`.
+Continuum storage lives outside this workspace (`~/.ctx/`, or `CONTINUUM_PATH`).
 You must treat `ctx` as the only bridge to that storage.
 Do not read from or write to Continuum storage directly.
 
 ---
 
-## State 0: Session Start (CRITICAL)
+## 0. Session Start (CRITICAL)
 
-You MUST run this as a shell/terminal command before writing a response,
-inspecting files, or taking any other action. Do not translate `ctx ...` into a
-runtime tool call such as `ctx:context`.
-
-    ctx context --project=%[1]s --compact
-
-Do not answer, inspect files, or take action before running this command.
-
-If compact context is insufficient for the requested work, run the full context
-without asking the user first:
+Run before any response, inspection, or action:
 
     ctx context --project=%[1]s
 
-If `ctx` is unavailable or this command fails:
-- continue normally
-- do not block the session
-- say that Continuum context could not be loaded
-- ask only for the minimum missing context needed to proceed
-- do not invent Continuum state or act as if context was loaded
+If compact context is insufficient, run full context without asking:
 
-Use the output as the authoritative source of:
-- current objective
-- current state
-- decisions already made
-- active issues
-- next step
+    ctx context --project=%[1]s  # omit --compact for full context
 
-## State 1: Task Check (CRITICAL)
+If `ctx` fails:
+- continue normally, say context couldn't load
+- ask only for minimum missing context
+- do not invent state or act as if context was loaded
 
-Immediately after loading context, you MUST check available tasks:
+---
+
+## 1. Tasks
+
+Check available tasks immediately after context:
 
     ctx list --project=%[1]s
 
-Review the list carefully before choosing task state.
+- existing open task matches → use it
+- clearly distinct work → start one: `CONTINUUM_AGENT=claude ctx task start <task> --project=%[1]s`
+- never start a task without checking first
+- never ask the user to restate info already in context
 
-- if an existing open task matches the current work, use it for `ctx capture`, `ctx handoff`, or `ctx task close`
-- if no suitable task exists and the user begins clearly distinct work, start one:
+---
 
-    CONTINUUM_AGENT=<stable-name> ctx task start <task> --project=%[1]s
+## 1.5 Skills (optional)
 
-Do not start a new task without checking existing tasks first.
-Do not capture a new line of work until the correct task exists.
-If work clearly belongs to a different task, create or switch tasks autonomously.
+Check available skills for cross-project reuse:
 
-Do not ask the user to restate information already present in this context.
+    ctx skill list
+    ctx skill show index    # overview of available skills
+    ctx skill show <name>   # full content
 
-## State 1.5: Skills (optional)
+Save, create or update:
 
-Cross-project skills are available for reuse.
-Run `ctx skill show index` for a quick overview of available skills.
-Load a relevant skill with `ctx skill show <name>` when applicable.
-
-When you solve a problem that took significant effort or that could recur
-across projects, document it:
-
-    ctx skill save <name> --yes <<'EOF'
+    ctx skill save <name> [--description=<text>] --yes <<'EOF'
     # <Skill Title>
-
-    ## Problem
-    <what problem this solves>
-
-    ## Solution
-    <the solution>
-
-    ## When to Apply
-    <context in which this is useful>
-    EOF
-
-The user may also hint with natural language:
-- "use the skill we defined for auth"
-- "do you remember how we solved the queue issue?"
-
-Respond by running `ctx skill list` and `ctx skill show <relevant-name>` autonomously.
-
----
-
-## Instruction Currency Check
-
-Check whether these installed Continuum instructions are current:
-
-    ctx agent status --project=%[1]s
-
-If the installed bootstrap is stale or unknown, tell the user to run:
-
-    ctx agent update --project=%[1]s
-
-Do not run `ctx agent update` autonomously unless the user explicitly asks.
-
----
-
-## State 2: During Work
-
-- continue through natural conversation and normal coding activity
-- do not call Continuum commands repeatedly
-- do not persist state during exploration or incomplete reasoning
-- before any Continuum write operation, identify yourself autonomously by invoking the command with a stable `CONTINUUM_AGENT` value for the current runtime
-- do not ask the user to set agent identity manually; the agent should handle this itself when issuing the command
-- if a required Continuum command fails, account for that failure in the conversation and continue with the minimum context needed
-- if instructions conflict, preserve Continuum storage safety and task lifecycle correctness first
-
-Example pattern:
-
-    CONTINUUM_AGENT=claude ctx capture <task> --project=%[1]s --yes <<'EOF'
     ...
     EOF
 
+If the user references a skill by name, try loading it autonomously.
+
 ---
 
-## Quick Lifecycle
+## 2. During Work
 
-Use the task lifecycle commands explicitly:
+- continue naturally; don't call Continuum commands repeatedly
+- don't persist during exploration or incomplete reasoning
+- always self-identify with `CONTINUUM_AGENT=<stable-name>` on write operations
+- if commands fail, account for the failure and continue with minimum context
+- if instructions conflict, preserve storage safety and lifecycle correctness first
 
-- progress made, task remains open: `CONTINUUM_AGENT=<stable-name> ctx capture <task> --project=%[1]s --type=state --yes`
-- paused and future continuity needed: `CONTINUUM_AGENT=<stable-name> ctx handoff <task> --project=%[1]s --yes`
-- actually finished: `CONTINUUM_AGENT=<stable-name> ctx task close <task> --project=%[1]s`
+---
+
+## Lifecycle
+
+| Situation | Command |
+|---|---|
+| Progress made, task open | `CONTINUUM_AGENT=<stable-name> ctx capture <task> --project=%[1]s --type=state --yes` |
+| Work paused, continue later | `CONTINUUM_AGENT=<stable-name> ctx handoff <task> --project=%[1]s --yes` |
+| Work finished | `CONTINUUM_AGENT=<stable-name> ctx task close <task> --project=%[1]s` |
 
 `ctx handoff` is not `ctx task close`.
 
----
+### Capture types
 
-## Project Onboarding
+- `--type=state` (default): objective, current state, decisions, next step, constraints, active issues
+- `--type=proposal`: proposed approach + rationale + review needed
+- `--type=request`: review/input request to another agent or user
+- `--type=response`: reply to a proposal or request
+- `--type=decision`: accepted decision that should be easy to find
 
-If the user asks to onboard the current project, that instruction is already sufficient.
-Do not ask the user to craft a special onboarding prompt.
+Use `ctx artifact list/show` to inspect; `ctx resolve` to clear handled ones.
 
-When onboarding a project:
+### Rules
 
-- analyze the current codebase and prepare the new `project.md` content
-- save it through `ctx project onboard %[1]s`
-- do not read from or write to the Continuum storage files directly
+- run `ctx capture` immediately on meaningful progress — do not ask, save, and report "Continuum updated."
+- NEVER ask permission before capture/handoff/close/task-switch
+- capture on validated progress, not only finished work (code changes, UX changes, decisions, test results, checkpoints)
+- don't use `ctx handoff` as substitute for closing a completed task
+- if work shifts to a different task, create or switch tasks autonomously
+- prefer small, concrete steps over broad redesigns
+- do not invent architecture, replace context with generic plans, or force structured input
 
-Use these flags consistently:
-
-- use `--yes` for agent-driven onboarding so the command does not stop for confirmation
-- use `--force` only when replacing an existing `project.md` that already contains real project content
-- do not add `--force` for first-time onboarding or when the file is still only the template/placeholder content
-
-Canonical agent flow:
-
-    CONTINUUM_AGENT=<stable-name> ctx project onboard %[1]s --yes <<'EOF'
-    <project markdown content>
-    EOF
-
-If the command reports that project context already exists and must be replaced, rerun it with `--force --yes`.
-
----
-
-## After Meaningful Progress
-
-When real progress has been made, compose the current state as markdown and pipe it to `ctx capture`.
-
-`ctx capture` defaults to `--type=state`. Use state captures only for the actual
-task state that should drive future `ctx context` output: objective, current state,
-decisions, next step, constraints, and active issues.
-
-Use typed captures for collaboration artifacts that should not replace task state:
-
-- `--type=proposal` for proposed plans, approaches, or changes that need review
-- `--type=request` for explicit review/input requests to another agent or the user
-- `--type=response` for replies to a proposal or request
-- `--type=decision` for decisions that were accepted and should be easy to find
-
-Inspect collaboration artifacts with `ctx artifact list/show`; clear handled ones from open counts with `ctx resolve`.
-Do not put proposals, review requests, responses, or tentative decisions into state captures unless they changed the actual task state.
-
-State capture pattern:
+### State capture template
 
     CONTINUUM_AGENT=<stable-name> ctx capture <task> --project=%[1]s --type=state --yes <<'EOF'
     ## Objective
@@ -204,58 +126,7 @@ State capture pattern:
     - <open problems>
     EOF
 
-Typed collaboration proposal:
-
-    CONTINUUM_AGENT=<stable-name> ctx capture <task> --project=%[1]s --type=proposal --yes <<'EOF'
-    ## Proposal
-    <proposed approach>
-
-    ## Rationale
-    - <why this is useful>
-
-    ## Review Needed
-    - <what another agent or user should validate>
-    EOF
-
-`<task>` must be a name from `ctx list` or a task you just started.
-Use `--yes` for autonomous agent operation; omit it only when a human is intentionally reviewing the save.
-Run `ctx capture` immediately when progress is worth recording. Do not ask the user first.
-After saving, report in one line: "Continuum updated."
-NEVER say "should I save this?", "want me to capture?", or ask for permission before a routine capture.
-Capture on validated progress, not only finished work. Examples:
-- a code change that alters behavior
-- a UX or workflow change that is now usable
-- a decision that changes task direction
-- a test or manual verification that confirms an outcome
-- a commit-worthy checkpoint, even if the task is not finished
-
-## State 3: Before Final Answer (CRITICAL)
-
-Before every final answer, assess whether this turn changed task state.
-
-- if meaningful progress happened and the task remains open, capture it
-- if the requested work is fully complete, close the task
-- if work is paused and future continuity is needed, write a handoff
-
-Use the Quick Lifecycle commands above.
-Do not use `ctx handoff` as a substitute for closing a completed task.
-Do not close a task just because progress was made.
-
----
-
-## When a Task Is Complete
-
-When the requested work is actually finished and no further work remains open on that task:
-
-    CONTINUUM_AGENT=<stable-name> ctx task close <task> --project=%[1]s
-
-If useful, capture final state immediately before closing.
-
----
-
-## Ending a Session
-
-If work is paused and should continue later, save a handoff:
+### Handoff template
 
     CONTINUUM_AGENT=<stable-name> ctx handoff <task> --project=%[1]s --yes <<'EOF'
     ## Objective
@@ -274,11 +145,7 @@ If work is paused and should continue later, save a handoff:
     - <open questions>
     EOF
 
----
-
-## Manual Maintenance
-
-Use only when explicitly asked or when snapshot data must be refreshed manually:
+### Snapshot refresh (manual maintenance, on request only)
 
     CONTINUUM_AGENT=<stable-name> ctx snapshot refresh <task> --project=%[1]s --yes <<'EOF'
     ## Objective
@@ -296,15 +163,17 @@ Use only when explicitly asked or when snapshot data must be refreshed manually:
 
 ---
 
-Rules:
+## Project Onboarding (rare, appendix)
 
-- always load context before proposing major changes
-- run `ctx capture` immediately on meaningful progress — do not ask, just save and report in one line
-- do not ask the user for permission before `ctx capture`, `ctx handoff`, `ctx snapshot refresh`, or task creation/switching; preserve conversation flow and act autonomously
-- when work clearly shifts to a different task, create or switch tasks yourself and continue
-- `ctx handoff` is for continuity on open tasks; `ctx task close` is for completed tasks
-- prefer small, concrete steps over broad redesigns
-- do not invent architecture without reason
-- do not replace existing context with generic plans
-- do not force the user into structured input
+If the user asks to onboard the current project, the instruction is already sufficient.
+Do not ask them to craft a special prompt.
+
+Analyze the codebase, prepare `project.md` content, and save through:
+
+    CONTINUUM_AGENT=<stable-name> ctx project onboard %[1]s --yes <<'EOF'
+    <project markdown content>
+    EOF
+
+Use `--yes` (agent-driven); add `--force` only when replacing existing real content.
+Do not read or write to storage files directly.
 <!-- CONTINUUM:END -->
