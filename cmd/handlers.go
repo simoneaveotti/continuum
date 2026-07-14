@@ -168,11 +168,14 @@ func handleSync(args []string) {
 		force = true
 	}
 
+	reporter := newProgressReporter()
+	reporter.report("Syncing with remote...")
 	result, err := setup.SyncWithOptions(setup.SyncOptions{
 		Remote: remote,
 		Prefer: prefer,
 		Force:  force,
 	})
+	reporter.finish()
 	if err != nil {
 		die(err)
 	}
@@ -215,14 +218,18 @@ func handleRepair(args []string) {
 	}
 	msg := ""
 	var err error
+	reporter := newProgressReporter()
 	switch {
 	case len(args) == 0:
+		reporter.report("Repairing storage...")
 		msg, err = setup.Repair()
 	case args[0] == "--activity":
+		reporter.report("Repairing activity log...")
 		msg, err = setup.RepairActivityLog()
 	default:
 		dieUsage("Usage: ctx repair [--activity]")
 	}
+	reporter.finish()
 	if err != nil {
 		die(err)
 	}
@@ -237,7 +244,9 @@ func handleResume(args []string) {
 		dieUsage("Usage: ctx resume")
 	}
 
-	result, err := setup.Resume()
+	reporter := newProgressReporter()
+	result, err := setup.Resume(reporter.report)
+	reporter.finish()
 	if err != nil {
 		die(err)
 	}
@@ -425,10 +434,11 @@ func handleAgent(args []string) {
 		if projectName == "" {
 			dieUsage(agentInstallUsage)
 		}
-		if err := agent.Install(projectName, force); err != nil {
+		results, err := agent.Install(projectName, force)
+		if err != nil {
 			die(err)
 		}
-		fmt.Printf("Installed Continuum bootstrap (project: %s).\n", projectName)
+		printAgentFileResults(results)
 	case "status":
 		projectName, _, err := parseAgentProjectArgs(args[1:])
 		if err != nil {
@@ -446,11 +456,15 @@ func handleAgent(args []string) {
 			die(err)
 		}
 		projectName = resolveAgentProject("update", projectName)
-		msg, err := agent.Update(projectName, force)
+		results, err := agent.Update(projectName, force)
 		if err != nil {
 			die(err)
 		}
-		fmt.Println(msg)
+		if results == nil {
+			fmt.Println("Agent bootstrap already current.")
+		} else {
+			printAgentFileResults(results)
+		}
 	case "remove":
 		for _, arg := range args[1:] {
 			if _, ok := parseFlag(arg, "--project="); ok {
@@ -458,14 +472,51 @@ func handleAgent(args []string) {
 			}
 			dieUsage(agentRemoveUsage)
 		}
-		if err := agent.Remove(); err != nil {
+		results, err := agent.Remove()
+		if err != nil {
 			die(err)
 		}
-		fmt.Println("Removed Continuum bootstrap.")
+		printAgentRemoveResults(results)
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown agent command.")
 		dieUsage(agentUsage...)
 	}
+}
+
+func printAgentFileResults(results []agent.FileResult) {
+	installed, skipped, errored := 0, 0, 0
+	for _, result := range results {
+		switch result.Status {
+		case "installed":
+			installed++
+			fmt.Printf("%s: installed\n", result.Filename)
+		case "skipped":
+			skipped++
+			fmt.Printf("%s: skipped (%s)\n", result.Filename, result.Detail)
+		case "error":
+			errored++
+			fmt.Printf("%s: error (%s)\n", result.Filename, result.Detail)
+		}
+	}
+	fmt.Printf("Installed: %d, Skipped: %d, Errors: %d\n", installed, skipped, errored)
+}
+
+func printAgentRemoveResults(results []agent.FileResult) {
+	removed, skipped, errored := 0, 0, 0
+	for _, result := range results {
+		switch result.Status {
+		case "removed":
+			removed++
+			fmt.Printf("%s: bootstrap removed\n", result.Filename)
+		case "skipped":
+			skipped++
+			fmt.Printf("%s: skipped (%s)\n", result.Filename, result.Detail)
+		case "error":
+			errored++
+			fmt.Printf("%s: error (%s)\n", result.Filename, result.Detail)
+		}
+	}
+	fmt.Printf("Removed: %d, Skipped: %d, Errors: %d\n", removed, skipped, errored)
 }
 
 func printAgentStatus(checks []agent.BootstrapCheck) {
@@ -599,7 +650,7 @@ func handleTask(args []string) {
 	}
 
 	subcommand := args[0]
-	project, taskName := parseTaskCommandArgs(args[1:])
+	project, taskName, autoConfirm := parseTaskCommandArgs(args[1:])
 	project = resolveProject(project)
 
 	switch subcommand {
@@ -634,7 +685,21 @@ func handleTask(args []string) {
 			fmt.Printf("Task '%s' is already active in project '%s'.\n", taskName, project)
 		}
 	case "delete":
-		if err := task.DeleteTask(taskName, project); err != nil {
+		if !autoConfirm {
+			ok, err := prompt.Confirm(fmt.Sprintf("Delete task %q from project %q? [y/N]: ", taskName, project))
+			if err != nil {
+				die(err)
+			}
+			if !ok {
+				fmt.Println("Delete canceled.")
+				return
+			}
+		}
+		reporter := newProgressReporter()
+		reporter.report("Removing task...")
+		err := task.DeleteTask(taskName, project)
+		reporter.finish()
+		if err != nil {
 			die(err)
 		}
 		fmt.Printf("Task '%s' removed from project '%s'.\n", taskName, project)
@@ -683,11 +748,25 @@ func handleProject(args []string) {
 			die(err)
 		}
 	case "delete":
-		project, err := parseProjectCommandArgs(args[1:])
+		project, autoConfirm, err := parseProjectDeleteArgs(args[1:])
 		if err != nil {
-			dieUsage("Usage: ctx project delete <project>")
+			dieUsage("Usage: ctx project delete <project> [--yes]")
 		}
-		if err := setup.DeleteProject(project); err != nil {
+		if !autoConfirm {
+			ok, err := prompt.Confirm(fmt.Sprintf("Delete project %q and all its tasks? [y/N]: ", project))
+			if err != nil {
+				die(err)
+			}
+			if !ok {
+				fmt.Println("Delete canceled.")
+				return
+			}
+		}
+		reporter := newProgressReporter()
+		reporter.report("Deleting project...")
+		err = setup.DeleteProject(project)
+		reporter.finish()
+		if err != nil {
 			die(err)
 		}
 		fmt.Printf("Project '%s' removed.\n", project)

@@ -609,9 +609,9 @@ func TestResumeLocalOnlyWithoutRemote(t *testing.T) {
 		t.Fatalf("InitSession() error: %v", err)
 	}
 
-	result, err := Resume()
+	result, err := Resume(nil)
 	if err != nil {
-		t.Fatalf("Resume() error: %v", err)
+		t.Fatalf("Resume(nil) error: %v", err)
 	}
 	if result.Sync != nil {
 		t.Fatal("expected no sync result without remote")
@@ -634,7 +634,7 @@ func TestResumeRejectsDirtyWorktree(t *testing.T) {
 		t.Fatalf("write dirty file: %v", err)
 	}
 
-	_, err := Resume()
+	_, err := Resume(nil)
 	if err == nil {
 		t.Fatal("expected dirty-worktree resume error")
 	}
@@ -662,9 +662,9 @@ func TestResumeSyncsWhenRemoteConfigured(t *testing.T) {
 		t.Fatalf("git remote add failed: %v\n%s", err, out)
 	}
 
-	result, err := Resume()
+	result, err := Resume(nil)
 	if err != nil {
-		t.Fatalf("Resume() error: %v", err)
+		t.Fatalf("Resume(nil) error: %v", err)
 	}
 	if result.Sync == nil {
 		t.Fatal("expected sync result with remote configured")

@@ -1,6 +1,7 @@
 .continuum/
 ctx
 tmp/
+.codegraph/
 AGENTS.md
 CLAUDE.md
 GEMINI.md

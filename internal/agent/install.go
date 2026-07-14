@@ -24,6 +24,14 @@ type BootstrapCheck struct {
 	Detail           string
 }
 
+// FileResult reports what happened to a single target file during Install/Update.
+// Status is one of "installed", "skipped", or "error".
+type FileResult struct {
+	Filename string
+	Status   string
+	Detail   string
+}
+
 func loadTargetFiles() ([]string, error) {
 	path := setup.ResolvePath("agent-targets.txt")
 	data, err := os.ReadFile(path)
@@ -50,32 +58,43 @@ func loadTargetFiles() ([]string, error) {
 	return targets, nil
 }
 
-func Install(project string, force bool) error {
+func Install(project string, force bool) ([]FileResult, error) {
 	if err := setup.ValidateProjectName(project); err != nil {
-		return err
+		return nil, err
 	}
 
 	targetFiles, err := loadTargetFiles()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	installed := 0
+	results := make([]FileResult, 0, len(targetFiles))
+	installedCount := 0
+	processed := 0
 
 	for _, filename := range targetFiles {
-		if err := installToFile(filename, project, force); err != nil {
-			fmt.Fprintf(os.Stderr, "Skipping %s: %v\n", filename, err)
-			continue
+		skipped, err := installToFile(filename, project, force)
+		switch {
+		case err != nil && err.Error() == "file not found":
+			results = append(results, FileResult{Filename: filename, Status: "skipped", Detail: "not found"})
+		case err != nil:
+			results = append(results, FileResult{Filename: filename, Status: "error", Detail: err.Error()})
+		case skipped:
+			results = append(results, FileResult{Filename: filename, Status: "skipped", Detail: "already current"})
+			processed++
+		default:
+			results = append(results, FileResult{Filename: filename, Status: "installed"})
+			installedCount++
+			processed++
 		}
-		installed++
 	}
 
-	if installed == 0 {
-		return fmt.Errorf("no agent instruction files found — create one of: AGENTS.md, CLAUDE.md, agent.md")
+	if processed == 0 {
+		return results, fmt.Errorf("no agent instruction files found — create one of: AGENTS.md, CLAUDE.md, agent.md")
 	}
 
-	_ = events.Append(project, "", "agent_install", "ok", fmt.Sprintf("%d file(s)", installed))
-	return nil
+	_ = events.Append(project, "", "agent_install", "ok", fmt.Sprintf("%d file(s)", installedCount))
+	return results, nil
 }
 
 func Status(project string) ([]BootstrapCheck, error) {
@@ -95,24 +114,23 @@ func Status(project string) ([]BootstrapCheck, error) {
 	return checks, nil
 }
 
-func Update(project string, force bool) (string, error) {
+// Update refreshes stale bootstrap instructions. It returns nil results when
+// nothing needed updating, otherwise the per-file outcome of the re-install.
+func Update(project string, force bool) ([]FileResult, error) {
 	if err := setup.ValidateProjectName(project); err != nil {
-		return "", err
+		return nil, err
 	}
 	checks, err := Status(project)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if !force && !needsUpdate(checks) {
-		return "Agent bootstrap already current.", nil
+		return nil, nil
 	}
 	if err := setup.InitSession(true); err != nil {
-		return "", err
+		return nil, err
 	}
-	if err := Install(project, true); err != nil {
-		return "", err
-	}
-	return "Agent bootstrap updated.", nil
+	return Install(project, true)
 }
 
 func needsUpdate(checks []BootstrapCheck) bool {
@@ -188,27 +206,30 @@ func extractBootstrapVersion(block string) string {
 	return ""
 }
 
-func installToFile(filename, project string, force bool) error {
+// installToFile writes the bootstrap block into filename. It returns
+// (true, nil) when the file already has a current block and force is false,
+// meaning nothing was written.
+func installToFile(filename, project string, force bool) (bool, error) {
 	path := filename
 
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("file not found")
+		return false, fmt.Errorf("file not found")
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("cannot read: %w", err)
+		return false, fmt.Errorf("cannot read: %w", err)
 	}
 
 	existing := string(content)
 
 	if strings.Contains(existing, MarkerStart) && strings.Contains(existing, MarkerEnd) {
 		if !force {
-			return nil
+			return true, nil
 		}
 		start := strings.Index(existing, MarkerStart)
 		end := strings.Index(existing, MarkerEnd)
@@ -219,39 +240,48 @@ func installToFile(filename, project string, force bool) error {
 
 	bootstrap, err := template.GetBootstrap(project)
 	if err != nil {
-		return fmt.Errorf("cannot get bootstrap template: %w", err)
+		return false, fmt.Errorf("cannot get bootstrap template: %w", err)
 	}
 
 	newContent := strings.TrimRight(existing, " \n\t") + "\n\n" + string(bootstrap)
 
 	if err := os.WriteFile(path, []byte(newContent), 0o644); err != nil {
-		return fmt.Errorf("cannot write: %w", err)
+		return false, fmt.Errorf("cannot write: %w", err)
 	}
 
-	return nil
+	return false, nil
 }
 
-func Remove() error {
+func Remove() ([]FileResult, error) {
 	targetFiles, err := loadTargetFiles()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	results := make([]FileResult, 0, len(targetFiles))
 	removed := 0
 
 	for _, filename := range targetFiles {
-		if err := removeFromFile(filename); err != nil {
-			continue
+		err := removeFromFile(filename)
+		switch {
+		case os.IsNotExist(err):
+			results = append(results, FileResult{Filename: filename, Status: "skipped", Detail: "not found"})
+		case err != nil && err.Error() == "no bootstrap found":
+			results = append(results, FileResult{Filename: filename, Status: "skipped", Detail: "no bootstrap found"})
+		case err != nil:
+			results = append(results, FileResult{Filename: filename, Status: "error", Detail: err.Error()})
+		default:
+			results = append(results, FileResult{Filename: filename, Status: "removed"})
+			removed++
 		}
-		removed++
 	}
 
 	if removed == 0 {
-		return fmt.Errorf("no Continuum bootstrap found to remove")
+		return results, fmt.Errorf("no Continuum bootstrap found to remove")
 	}
 
 	_ = events.Append("", "", "agent_remove", "ok", fmt.Sprintf("%d file(s)", removed))
-	return nil
+	return results, nil
 }
 
 func removeFromFile(filename string) error {

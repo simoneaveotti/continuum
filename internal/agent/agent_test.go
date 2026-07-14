@@ -69,9 +69,12 @@ func TestInstallToFile_AlreadyInstalled(t *testing.T) {
 	defer os.Chdir(orig)
 
 	// Should skip (no force)
-	err := installToFile("AGENTS.md", "myproject", false)
+	skipped, err := installToFile("AGENTS.md", "myproject", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !skipped {
+		t.Error("expected skipped=true when already installed and force=false")
 	}
 
 	// Content should be unchanged
@@ -87,7 +90,7 @@ func TestInstallToFile_NotFound(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(orig)
 
-	err := installToFile("NONEXISTENT.md", "myproject", false)
+	_, err := installToFile("NONEXISTENT.md", "myproject", false)
 	if err == nil {
 		t.Error("expected error for non-existent file, got nil")
 	}
@@ -131,10 +134,10 @@ func TestInstallAndRemoveEmitActivityEvents(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(orig)
 
-	if err := Install("demo", false); err != nil {
+	if _, err := Install("demo", false); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
-	if err := Remove(); err != nil {
+	if _, err := Remove(); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 
