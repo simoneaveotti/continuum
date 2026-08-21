@@ -44,19 +44,49 @@ Continuum stores state outside the workspace (default: `~/.ctx/`).
 
 ## Installation
 
+### Install a release (recommended)
+
+The installer downloads the latest release, installs `ctx` and its bundled
+templates in `~/.local/bin`, and preserves executable permissions. On macOS it
+also clears a possible quarantine attribute and applies an ad-hoc signature
+when the system tools are available.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/simoneaveotti/continuum/main/install.sh | bash
-
-go build -o ctx ./cmd/
-sudo cp ctx /usr/local/bin/
-xattr -c /usr/local/bin/ctx 2>/dev/null || true
 ```
 
-The installer uses `~/.local/bin` by default. For a system-wide install:
+Ensure `~/.local/bin` is on your `PATH` if the installer tells you it is not.
+To inspect the script before running it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/simoneaveotti/continuum/main/install.sh -o /tmp/continuum-install.sh
+less /tmp/continuum-install.sh
+bash /tmp/continuum-install.sh
+```
+
+For a system-wide installation, set the destination explicitly:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/simoneaveotti/continuum/main/install.sh | sudo env INSTALL_DIR=/usr/local/bin bash
 ```
+
+### Build from source
+
+Building from source requires Go 1.26.1 or later. This is primarily useful for
+development; it does not require `sudo` when installed in the default user
+location.
+
+```bash
+go build -o ctx ./cmd/
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
+INSTALL_PREFIX="$(cd "$(dirname "$INSTALL_DIR")" && pwd)"
+install -d "$INSTALL_DIR" "$INSTALL_PREFIX/share/continuum/templates"
+install -m 755 ctx "$INSTALL_DIR/ctx"
+cp -R templates/. "$INSTALL_PREFIX/share/continuum/templates/"
+```
+
+The template copy is required for an installation outside a source checkout.
+No separate `chmod`, `xattr`, or macOS-specific copy step is required.
 
 For release automation, Homebrew tap, and distribution details, see [docs/RELEASING.md](docs/RELEASING.md).
 
@@ -216,7 +246,7 @@ For export encryption, see [docs/encryption.md](docs/encryption.md).
 - `ctx project list`
 - `ctx project init <project>`
 - `ctx project onboard <project>`
-- `ctx project delete <project>`
+- `ctx project delete <project> [--yes]`
 - `ctx config set host <name>`
 - `ctx agent install --project=<name>`
 - `ctx agent status [--project=<name>]`
