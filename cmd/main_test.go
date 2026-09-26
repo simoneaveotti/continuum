@@ -401,6 +401,50 @@ func TestParseListArgs_All(t *testing.T) {
 	}
 }
 
+func TestParseResumeArgs(t *testing.T) {
+	verbose, err := parseResumeArgs([]string{"--verbose"})
+	if err != nil {
+		t.Fatalf("parseResumeArgs: %v", err)
+	}
+	if !verbose {
+		t.Fatal("expected verbose output")
+	}
+
+	verbose, err = parseResumeArgs(nil)
+	if err != nil {
+		t.Fatalf("parseResumeArgs without flags: %v", err)
+	}
+	if verbose {
+		t.Fatal("expected compact output by default")
+	}
+
+	if _, err := parseResumeArgs([]string{"--unknown"}); err == nil {
+		t.Fatal("expected error for unknown resume flag")
+	}
+}
+
+func TestParseHelpArgs(t *testing.T) {
+	verbose, err := parseHelpArgs([]string{"--verbose"})
+	if err != nil {
+		t.Fatalf("parseHelpArgs: %v", err)
+	}
+	if !verbose {
+		t.Fatal("expected verbose help")
+	}
+
+	verbose, err = parseHelpArgs(nil)
+	if err != nil {
+		t.Fatalf("parseHelpArgs without flags: %v", err)
+	}
+	if verbose {
+		t.Fatal("expected compact help by default")
+	}
+
+	if _, err := parseHelpArgs([]string{"--unknown"}); err == nil {
+		t.Fatal("expected error for unknown help flag")
+	}
+}
+
 func TestParseExportArgs_Task(t *testing.T) {
 	projects, taskName, customPath, algo, session, err := parseExportArgs([]string{"my-task", "--project=my-project", "--path=/tmp/out", "--encrypt"})
 	if err != nil {

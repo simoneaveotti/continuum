@@ -19,13 +19,29 @@ var (
 	usageColorsEnabled  = defaultUsageColorsEnabled
 )
 
-func printUsage() {
+func printUsage(verbose bool) {
 	fmt.Println(styleUsageTitle("Continuum"))
 	fmt.Println("Context orchestration for AI-assisted development")
 	fmt.Println()
 	fmt.Println(styleUsageSection("Usage:"))
 	fmt.Println("  " + styleUsageInline("ctx <command> [options]"))
 	fmt.Println()
+
+	printUsageSection("Common commands", [][2]string{
+		{"ctx resume", "prepare storage and synchronize a new work session"},
+		{"ctx context [<task>] [--compact]", "print the current task context"},
+		{"ctx capture <task> --project=<name>", "save task progress"},
+		{"ctx list", "list active tasks in the current project"},
+		{"ctx task start <task> --project=<name>", "start a task"},
+		{"ctx task close <task> --project=<name>", "close a completed task"},
+		{"ctx sync", "synchronize storage with its remote"},
+		{"ctx project list", "list managed projects"},
+	})
+
+	if !verbose {
+		fmt.Println("Run ctx --help --verbose to see all commands and options.")
+		return
+	}
 
 	printUsageSection("Setup", [][2]string{
 		{"ctx init", "initialize the local Continuum session"},
@@ -42,7 +58,7 @@ func printUsage() {
 	})
 
 	printUsageSection("Context", [][2]string{
-		{"ctx resume", "prepare Continuum storage for a new work session"},
+		{"ctx resume [--verbose]", "prepare Continuum storage for a new work session"},
 		{"ctx context", "print the current project context"},
 		{"ctx context <task> [--compact]", "print context for a specific task"},
 		{"ctx capture <task> --project=<name> [--type=state|proposal|request|response|decision] [--resolves=<filename>]", "save task state or a collaboration artifact"},

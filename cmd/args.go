@@ -395,6 +395,32 @@ func parseListArgs(args []string) (project, status string, err error) {
 	return project, status, nil
 }
 
+var resumeUsage = "Usage: ctx resume [--verbose]"
+
+func parseResumeArgs(args []string) (verbose bool, err error) {
+	for _, arg := range args {
+		if arg == "--verbose" {
+			verbose = true
+			continue
+		}
+		return false, errors.New(resumeUsage)
+	}
+	return verbose, nil
+}
+
+var helpUsage = "Usage: ctx --help [--verbose]"
+
+func parseHelpArgs(args []string) (verbose bool, err error) {
+	for _, arg := range args {
+		if arg == "--verbose" {
+			verbose = true
+			continue
+		}
+		return false, errors.New(helpUsage)
+	}
+	return verbose, nil
+}
+
 var taskUsage = []string{
 	"Usage: ctx task <command> [options]",
 	"Commands: start, close, list, show",

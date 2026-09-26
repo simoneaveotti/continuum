@@ -240,8 +240,9 @@ func handleRepair(args []string) {
 }
 
 func handleResume(args []string) {
-	if len(args) != 0 {
-		dieUsage("Usage: ctx resume")
+	verbose, err := parseResumeArgs(args)
+	if err != nil {
+		dieUsage(err.Error())
 	}
 
 	reporter := newProgressReporter()
@@ -265,12 +266,13 @@ func handleResume(args []string) {
 	}
 	fmt.Printf("Unsynced: %d commit(s)\n", result.UnsyncedCount)
 
-	if len(result.Projects) == 0 {
-		fmt.Println("Projects: none")
+	projectCount := len(result.Projects)
+	fmt.Printf("Projects: %d managed\n", projectCount)
+	if !verbose || projectCount == 0 {
 		return
 	}
 
-	fmt.Println("Projects:")
+	fmt.Println("Project details:")
 	for _, project := range result.Projects {
 		activeTasks, err := task.ListWithStatus(project, string(task.StatusActive))
 		if err != nil {
@@ -1119,7 +1121,7 @@ func dispatchCommand(command string, args []string) {
 		handleConfig(args)
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown command:", command)
-		printUsage()
+		printUsage(false)
 		os.Exit(1) // printUsage already prints instructions
 	}
 }
