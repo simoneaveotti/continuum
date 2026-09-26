@@ -77,7 +77,7 @@ ctx context --project=<project> --compact
 Interpretation:
 
 - start every new work session with `ctx resume` before choosing a project
-- `ctx resume` validates storage health, attempts repair when safe, runs sync when the repo is clean, and prints a global orientation view before any project is selected
+- `ctx resume` validates storage health, attempts repair when safe, runs sync when the repo is clean, and prints a compact global orientation summary before any project is selected; add `--verbose` for project and active-task details
 - after `ctx resume`, use `ctx context` or `ctx list` to choose what to resume
 - use `ctx sync` directly when you only need to synchronize storage and do not need repair/orientation output
 - use `ctx context --project=<project> --compact` for project/task operational state; it is not a replacement for storage-level `ctx resume`

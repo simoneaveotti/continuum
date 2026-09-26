@@ -25,6 +25,7 @@ Create a dedicated private git repository for this storage first, for example on
 Do not reuse your application repository for Continuum state.
 
 ```bash
+ctx init
 ctx sync --remote=git@github.com:you/continuum-state.git
 ```
 
@@ -47,6 +48,8 @@ Run a second Continuum instance in a different directory:
 ctx context --project=my-app
 
 # Sensitive project — local only
+CONTINUUM_PATH=~/.ctx-private ctx init
+CONTINUUM_PATH=~/.ctx-private ctx project init sensitive-project
 CONTINUUM_PATH=~/.ctx-private ctx context --project=sensitive-project
 ```
 

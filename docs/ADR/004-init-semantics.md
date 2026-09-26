@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed
+Superseded — retained as historical design context. Current setup is `ctx init`
+followed by `ctx project init <project>`; `ctx init <project>` is unsupported.
 
 ## Context
 

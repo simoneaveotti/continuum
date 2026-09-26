@@ -11,7 +11,7 @@ Continuum persists all agent data under `~/.ctx/`, but the platform must stay lo
 ## Decision
 
 - Treat `~/.ctx/` itself as a hidden git repository. The repository stays append-only: every `ctx capture`, `ctx handoff`, and `ctx snapshot refresh` writes a timestamped file (`snapshot.<RFC3339>.<uuid-6>.md`, `handoff.<...>.md`), commits that file, and pushes to `origin/main` in a best-effort fashion.
-- `ctx init` bootstraps git plus `.gitignore`, seeds an initial commit, and optionally clones a remote via `--remote=<url>` when the storage directory is empty. `ctx init <project>` commits the new project file as `init(<project>): project initialized`.
+- `ctx init` bootstraps git plus `.gitignore`, seeds an initial commit, and optionally clones a remote via `--remote=<url>` when the storage directory is empty. `ctx project init <project>` commits the new project file as `init(<project>): project initialized`.
 - `ctx sync [--remote=<url>]` orchestrates the read/write boundary: it adds the remote if requested, bootstraps `origin/main` with the first push when the remote is empty, otherwise runs `git pull --rebase origin main` followed by `git push origin main`, clears a `local/unsynced` marker on success, logs failures in `local/git.log` (rotated at ~1 MiB), and prints the latest log line for visibility. Failed pushes append the HEAD hash to `local/unsynced`.
 - `ctx context` always attempts a pull before loading state; it warns (non-blocking) if the pull fails and reports the number of unsynced commits so agents know whether their work is still local.
 - Additional commands enforce recovery and cleanup:
@@ -38,7 +38,7 @@ Expected semantics:
 - detect and repair in-progress merge/rebase state when safe
 - stop with a clear diagnosis if the working tree is dirty
 - run the equivalent of `ctx sync` when the repository is clean
-- print a global orientation summary such as available projects, open tasks, and unsynced state
+- print a compact global orientation summary including the managed-project count and unsynced state; `ctx resume --verbose` adds per-project active-task details
 
 Expected user-facing failure handling:
 

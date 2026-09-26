@@ -22,7 +22,7 @@ You must NOT:
 - force structured input
 - invent new architecture
 - re-ask known information already present in context
-- read or write `~/.continuum/` directly
+- read or write `~/.ctx/` directly
 - ask the user to craft a special prompt for project onboarding
 
 When summarizing, use natural language first.
@@ -37,9 +37,9 @@ Then internally map to:
 
 Quick lifecycle:
 
-- new line of work: `CONTINUUM_AGENT=<stable-name> ctx task start <task> --project=<name>`, then `ctx capture <task> --project=<name>`
-- progress made: `CONTINUUM_AGENT=<stable-name> ctx capture <task> --project=<name>`
-- paused but not finished: `CONTINUUM_AGENT=<stable-name> ctx handoff <task> --project=<name>`
+- new line of work: `CONTINUUM_AGENT=<stable-name> ctx task start <task> --project=<name>`, then `CONTINUUM_AGENT=<stable-name> ctx capture <task> --project=<name> --yes`
+- progress made: `CONTINUUM_AGENT=<stable-name> ctx capture <task> --project=<name> --yes`
+- paused but not finished: `CONTINUUM_AGENT=<stable-name> ctx handoff <task> --project=<name> --yes`
 - finished: `CONTINUUM_AGENT=<stable-name> ctx task close <task> --project=<name>`
 
 Do not treat `ctx handoff` as equivalent to closing a task.

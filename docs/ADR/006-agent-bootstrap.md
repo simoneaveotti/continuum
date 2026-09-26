@@ -26,7 +26,7 @@ Continuum must:
 ### 1. Bootstrap Command
 
 ```bash
-ctx agent install
+ctx agent install --project=<project>
 ```
 
 Injects Continuum bootstrap block into common agent instruction files:
@@ -55,7 +55,7 @@ This re-injects the current bootstrap block instead of leaving an older installe
 
 The injected block instructs the agent to:
 
-- Run `ctx context --project=<project>` as the first action of every session
+- Run `ctx context --project=<project> --compact` as the first action of every session
 - Not ask user to restate known information already present in Continuum context
 - Work through natural conversation
 - Use `ctx list` immediately after loading project context
@@ -71,7 +71,7 @@ Example:
 
 Run this first, before writing a single word of response and before any other action:
 
-    ctx context --project=my-project
+    ctx context --project=my-project --compact
 
 ## Task Check
 

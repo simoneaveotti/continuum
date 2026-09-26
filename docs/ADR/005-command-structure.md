@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed
+Superseded — retained as historical design context. Consult `ctx --help
+--verbose` and `README.md` for the implemented command structure.
 
 ## Context
 

@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed
+Superseded — retained as historical design context. See `README.md` and
+`docs/storage.md` for the current storage model.
 
 ## Context
 

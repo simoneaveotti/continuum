@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed
+Superseded — retained as historical design context. The current CLI requires
+explicit task names for `ctx capture`; it has no conversational `ctx profile`,
+`ctx project`, or standalone `ctx snapshot` editing commands.
 
 ## Context
 

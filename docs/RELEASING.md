@@ -2,7 +2,7 @@
 
 ## Distribution
 
-Continuum is a single statically-linked Go binary (`ctx`) with no runtime dependency beyond `git` and optional `gpg` for encrypted exports.
+Continuum is a single statically-linked Go binary (`ctx`) with no runtime dependency beyond `git`.
 
 Primary release targets:
 
@@ -136,6 +136,9 @@ The public `release.yml` workflow runs on `v*` tags and should publish:
 - GitHub release artifacts
 - checksums
 - Homebrew formula updates
+
+It creates a GitHub draft release. Review or edit its notes, then publish the
+draft explicitly with `gh release edit vX.Y.Z --draft=false`.
 
 ## Homebrew
 

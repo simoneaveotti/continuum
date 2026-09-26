@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Superseded — retained as historical design context. The current compact output
+format is defined by the implementation and is the form delivered by
+`ctx context --compact`.
 
 ## Goal
 

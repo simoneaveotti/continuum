@@ -140,6 +140,8 @@ Before starting a new session on existing storage, run:
 ctx resume
 ```
 
+Use `ctx resume --verbose` when you need the per-project active-task breakdown.
+
 When an agent starts, it should read the injected bootstrap instructions and load context through `ctx`:
 
 ```bash
@@ -251,11 +253,11 @@ For export encryption, see [docs/encryption.md](docs/encryption.md).
 - `ctx agent install --project=<name>`
 - `ctx agent status [--project=<name>]`
 - `ctx agent update [--project=<name>] [--force]`
-- `ctx agent remove [--project=<name>]`
+- `ctx agent remove`
 
 ### Context
 
-- `ctx resume`
+- `ctx resume [--verbose]`
 - `ctx context --project=<name>`
 - `ctx context <task> --project=<name>`
 - `ctx capture <task> --project=<name>`
@@ -266,9 +268,10 @@ For export encryption, see [docs/encryption.md](docs/encryption.md).
 - `ctx resolve <task> <filename> --project=<name>`
 - `ctx capture <task> --project=<name> --yes`
 - `ctx history [--project=<name>] [--task=<name>] [--limit=<n>] [--since=<duration>]`
+- `ctx timeline [--project=<name>] [--task=<name>] [--limit=<n>] [--since=<duration>]`
 - `ctx repair`
 - `ctx sync [--remote=<url>] [--prefer=local|remote] [--force]`
-- `ctx watch [--project=<name>] [--interval=<duration>]`
+- `ctx watch [--project=<name>] [--interval=<duration>] [--tui]`
 
 ### Task Management
 
@@ -278,12 +281,24 @@ For export encryption, see [docs/encryption.md](docs/encryption.md).
 - `ctx task start <task> --project=<name>`
 - `ctx task close <task> --project=<name>`
 - `ctx task reopen <task> --project=<name>`
-- `ctx task delete <task> --project=<name>`
+- `ctx task delete <task> --project=<name> [--yes]`
 - `ctx handoff <task> --project=<name>`
 - `ctx handoff <task> --project=<name> --yes`
 - `ctx snapshot refresh <task> --project=<name>`
 - `ctx snapshot refresh <task> --project=<name> --yes`
 - `ctx snapshot clean <task> --project=<name> [--keep=N]`
+
+### Skills
+
+- `ctx skill list`
+- `ctx skill show <name>`
+- `ctx skill save <name> [--description=<text>] [--yes]`
+- `ctx skill delete <name> [--yes]`
+
+### Help
+
+- `ctx --help` for common commands
+- `ctx --help --verbose` for the full command, option, and example reference
 
 ### Import / Export
 
@@ -316,6 +331,8 @@ For export encryption, see [docs/encryption.md](docs/encryption.md).
 │   ├── bootstrap.md
 │   ├── agent.md
 │   └── agent-targets.txt
+├── events/
+│   └── activity.ndjson
 ├── local/
 │   ├── identity.json
 │   ├── git.log

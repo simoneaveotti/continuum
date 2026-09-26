@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed
+Superseded — retained as historical design context. The current CLI detects a
+project from the working-directory name or accepts `--project=<name>` after a
+command; it does not support `CONTINUUM_PROJECT` or global flags.
 
 ## Context
 

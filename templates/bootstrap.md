@@ -19,7 +19,7 @@ Do not read from or write to Continuum storage directly.
 
 Run before any response, inspection, or action:
 
-    ctx context --project=%[1]s
+    ctx context --project=%[1]s --compact
 
 If compact context is insufficient, run full context without asking:
 
@@ -50,8 +50,7 @@ Check available tasks immediately after context:
 Check available skills for cross-project reuse:
 
     ctx skill list
-    ctx skill show index    # overview of available skills
-    ctx skill show <name>   # full content
+    ctx skill show <name>   # full content for a listed skill
 
 Save, create or update:
 

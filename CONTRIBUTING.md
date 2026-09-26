@@ -2,7 +2,7 @@
 
 ## Project Structure
 
-Continuum is a single Go binary (`ctx`) with zero runtime dependencies beyond `git` and optional `gpg`.
+Continuum is a single Go binary (`ctx`) with no runtime dependency beyond `git`.
 
 ```
 cmd/              — main entry point

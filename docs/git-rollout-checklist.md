@@ -24,7 +24,7 @@ Expected:
 ## 2. Project, Task, and Capture
 
 ```bash
-./ctx init continuum
+./ctx project init continuum
 ./ctx task start smoke
 ./ctx capture smoke --yes <<'EOF'
 ## Objective

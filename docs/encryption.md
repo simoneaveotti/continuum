@@ -18,8 +18,10 @@ same passphrase:
 ctx import ./continuum-history.zip --decrypt
 ```
 
-Passphrases are read from stdin; interactive entry is safer than piping
-literals from shell commands.
+Passphrases are read from `/dev/tty` when it is available, so encrypted
+exports and imports still prompt safely when stdin is piped. In environments
+without a terminal, Continuum falls back to stdin. Avoid piping literals when
+interactive entry is available.
 
 What this does not guarantee:
 
