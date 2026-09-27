@@ -75,6 +75,26 @@ func TestExtractZipFile_ZipSlip(t *testing.T) {
 	}
 }
 
+func TestValidateArchiveSizeRejectsOversizedEntry(t *testing.T) {
+	reader := &zip.Reader{File: []*zip.File{{FileHeader: zip.FileHeader{UncompressedSize64: uint64(maxArchiveBytes) + 1}}}}
+	if err := validateArchiveSize(reader); err != errArchiveTooLarge {
+		t.Fatalf("validateArchiveSize() error = %v, want %v", err, errArchiveTooLarge)
+	}
+}
+
+func TestImportArchiveRejectsOversizedFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "large.zip")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(path, maxArchiveBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ImportArchive(path, false, ""); err != errArchiveTooLarge {
+		t.Fatalf("ImportArchive() error = %v, want %v", err, errArchiveTooLarge)
+	}
+}
+
 func TestExtractZipFile_AbsolutePath(t *testing.T) {
 	dir := t.TempDir()
 	// Absolute path in zip entry

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"continuum/internal/storagepath"
 )
 
 var basePath string
@@ -41,17 +43,7 @@ func ValidateSourcePath(path string) error {
 
 func userTemplatesDir() string {
 	if basePath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil || home == "" {
-			home = os.Getenv("HOME")
-		}
-		if home == "" {
-			home = os.Getenv("USERPROFILE")
-		}
-		if home == "" {
-			home = "."
-		}
-		basePath = filepath.Join(home, ".ctx")
+		basePath = storagepath.ContinuumPath()
 	}
 	return filepath.Join(basePath, "templates")
 }

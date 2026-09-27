@@ -3,6 +3,7 @@ package task
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"continuum/internal/events"
 
@@ -10,9 +11,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func TestShortTSIncludesDate(t *testing.T) {
+func TestShortTSShowsClockWithSeconds(t *testing.T) {
 	got := shortTS("2026-03-30T14:05:06Z")
-	if got != "2026-03-30 14:05" {
+	if got != "14:05:06" {
 		t.Fatalf("shortTS() = %q", got)
 	}
 }
@@ -40,10 +41,186 @@ func TestFilterEventsByProjects(t *testing.T) {
 	}
 }
 
-func TestTrimAddsEllipsis(t *testing.T) {
-	got := trim("abcdef", 4)
+func TestProjectPickerFiltersAndSelects(t *testing.T) {
+	m := newViewModel(100, 30)
+	m.allProjects = []string{"alpha", "beta", "smoke-alpha"}
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	m = next.(watchTUIModel)
+	if !m.projectPicking {
+		t.Fatal("p did not open the project picker")
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("alp")})
+	m = next.(watchTUIModel)
+	if got := m.matchingProjects(); len(got) != 2 {
+		t.Fatalf("matchingProjects() = %v, want two alpha projects", got)
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(watchTUIModel)
+	if m.projectSelected != 1 {
+		t.Fatalf("projectSelected = %d, want 1", m.projectSelected)
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(watchTUIModel)
+	if m.projectPicking || len(m.projects) != 1 || m.projects[0] != "smoke-alpha" {
+		t.Fatalf("picker did not select highlighted match: %+v", m)
+	}
+}
+
+func TestProjectPickerAllowsJAndKInProjectNames(t *testing.T) {
+	m := newViewModel(100, 30)
+	m.allProjects = []string{"kappa", "jupiter"}
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	m = next.(watchTUIModel)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	m = next.(watchTUIModel)
+	if m.projectDraft != "k" {
+		t.Fatalf("projectDraft = %q, want k", m.projectDraft)
+	}
+}
+
+func TestModalKeyContract(t *testing.T) {
+	m := newViewModel(100, 30)
+
+	// Enter opens details from the list; Esc closes them without changing state.
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+	m = next.(watchTUIModel)
+	if !m.info {
+		t.Fatal("i must open details from the event list")
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = next.(watchTUIModel)
+	if m.info {
+		t.Fatal("esc must close details")
+	}
+
+	// Search owns input until explicitly confirmed or cancelled; i is literal text.
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = next.(watchTUIModel)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+	m = next.(watchTUIModel)
+	if !m.searching || m.info || m.draft != "i" {
+		t.Fatalf("search must retain input ownership: %+v", m)
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = next.(watchTUIModel)
+	if m.searching {
+		t.Fatal("esc must cancel search editing")
+	}
+}
+
+func TestTruncateCellsAddsEllipsis(t *testing.T) {
+	got := truncateCells("abcdef", 4)
 	if got != "abc…" {
-		t.Fatalf("trim() = %q", got)
+		t.Fatalf("truncateCells() = %q", got)
+	}
+}
+
+// A byte-based truncation used to cut multi-byte runes in half, which broke
+// the selection gutter into an invalid UTF-8 sequence.
+func TestTruncateCellsNeverSplitsARune(t *testing.T) {
+	got := truncateCells("▌marker", 1)
+	if !utf8.ValidString(got) {
+		t.Fatalf("truncateCells produced invalid UTF-8: %q", got)
+	}
+	if got := truncateCells("▌marker", 3); got != "▌m…" {
+		t.Fatalf("truncateCells(\"▌marker\", 3) = %q, want %q", got, "▌m…")
+	}
+}
+
+// The values below are the 26 distinct agent names found in a real
+// 5492-event activity log, with their observed counts.
+func TestNormalizedAgentFoldsRealSessionNames(t *testing.T) {
+	folded := map[string]string{
+		"codex":                              "codex",  // 3653
+		"codex-root":                         "codex",  // 311
+		"codex-docgraph":                     "codex",  // 1
+		"codex-review-interval":              "codex",  // 1
+		"codex-analyze-unmatched-authors":    "codex",  // 1
+		"codex-unmatched-author-audit":       "codex",  // 3
+		"codex_validate_reassociation_rules": "codex",  // 3
+		"codex-laravel-messaging-review":     "codex",  // 1
+		"codex-gcp-message-mvp":              "codex",  // 1
+		"claude":                             "claude", // 733
+		"claude-sonnet":                      "claude", // 7
+		"gemini":                             "gemini", // 14
+		"gemini-cli":                         "gemini", // 3
+		"gpt":                                "gpt",    // 3
+		"gpt-5":                              "gpt",    // 6
+		"pccm-reviewer":                      "pccm",   // 3
+		"spire-architect":                    "spire",  // 2
+		"spire-ops":                          "spire",  // 1
+		// Unqualified names are their own identity and must not be folded.
+		"unknown":  "unknown", // 616
+		"root":     "root",    // 66
+		"opencode": "opencode",
+		"pi":       "pi",
+		"meyer":    "meyer",
+		"metadocs": "metadocs",
+		"":         "unknown",
+		"   ":      "unknown",
+	}
+	for input, want := range folded {
+		if got := normalizedAgent(input); got != want {
+			t.Errorf("normalizedAgent(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+// The point of folding is not fewer distinct names, it is that a handful of
+// identities cover the log. Weighted by the real counts, the top identities
+// must account for essentially every event, otherwise the legend stays noise.
+func TestNormalizedAgentConcentratesRealLogVolume(t *testing.T) {
+	real := map[string]int{
+		"codex": 3653, "codex-root": 311, "codex-unmatched-author-audit": 3,
+		"codex_validate_reassociation_rules": 3, "codex-docgraph": 1,
+		"codex-review-interval": 1, "codex-analyze-unmatched-authors": 1,
+		"codex-laravel-messaging-review": 1, "codex-gcp-message-mvp": 1,
+		"claude": 733, "claude-sonnet": 7,
+		"gemini": 14, "gemini-cli": 3,
+		"gpt": 3, "gpt-5": 6,
+		"unknown": 616, "root": 66, "opencode": 54,
+		"pi": 3, "meyer": 2, "metadocs": 2, "assistant": 2,
+		"pccm-reviewer": 3, "spire-architect": 2, "spire-ops": 1,
+	}
+
+	buckets := map[string]int{}
+	total := 0
+	for name, count := range real {
+		buckets[normalizedAgent(name)] += count
+		total += count
+	}
+
+	// The five identities the legend can show must cover >99% of the log.
+	leading := []string{"codex", "claude", "unknown", "root", "opencode"}
+	covered := 0
+	for _, name := range leading {
+		covered += buckets[name]
+	}
+	share := float64(covered) / float64(total)
+	if share < 0.99 {
+		t.Fatalf("top identities cover only %.1f%% of %d events: %v", share*100, total, buckets)
+	}
+
+	// And the largest bucket must have absorbed the codex variants.
+	if buckets["codex"] < 3900 {
+		t.Fatalf("codex bucket is %d, expected the variants to be folded in: %v", buckets["codex"], buckets)
+	}
+}
+
+func TestAgentQualifierReportsDroppedPart(t *testing.T) {
+	cases := map[string]string{
+		"codex-root":                         "root",
+		"codex-docgraph":                     "docgraph",
+		"codex_validate_reassociation_rules": "validate_reassociation_rules",
+		"codex":                              "",
+		"unknown":                            "",
+		"":                                   "",
+	}
+	for input, want := range cases {
+		if got := agentQualifier(input); got != want {
+			t.Errorf("agentQualifier(%q) = %q, want %q", input, got, want)
+		}
 	}
 }
 
@@ -237,5 +414,43 @@ func TestToggleShowAllAgentsKey(t *testing.T) {
 	}
 	if toggled.showAllAgents {
 		t.Fatalf("expected showAllAgents to be disabled")
+	}
+}
+
+func TestWrapWordsBreaksOnWordBoundaries(t *testing.T) {
+	got := wrapWords("a long detail that must not be truncated", 20)
+	for _, line := range got {
+		if lipgloss.Width(line) > 20 {
+			t.Fatalf("line %q is %d cells, want <= 20", line, lipgloss.Width(line))
+		}
+	}
+	joined := strings.Join(got, " ")
+	if joined != "a long detail that must not be truncated" {
+		t.Fatalf("wrapWords lost or reordered text: %q", joined)
+	}
+	// No word may be split across lines.
+	words := map[string]bool{}
+	for _, line := range got {
+		for _, w := range strings.Fields(line) {
+			words[w] = true
+		}
+	}
+	for _, want := range []string{"detail", "truncated", "must"} {
+		if !words[want] {
+			t.Errorf("word %q was split across lines: %q", want, got)
+		}
+	}
+}
+
+// A single token wider than the pane must still be broken, not dropped.
+func TestWrapWordsHardBreaksOverlongWord(t *testing.T) {
+	got := wrapWords("projects/continuum/tasks/tui-polish/state.20260326T140506Z.a1b2c3.md", 20)
+	if strings.Join(strings.Fields(strings.Join(got, "")), "") != "projects/continuum/tasks/tui-polish/state.20260326T140506Z.a1b2c3.md" {
+		t.Fatalf("overlong word was not preserved: %q", got)
+	}
+	for _, line := range got {
+		if lipgloss.Width(line) > 20 {
+			t.Fatalf("line %q is %d cells, want <= 20", line, lipgloss.Width(line))
+		}
 	}
 }

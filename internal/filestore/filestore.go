@@ -176,3 +176,27 @@ func randHex6() string {
 	}
 	return fmt.Sprintf("%x", b)
 }
+
+// WithinDir reports whether path resolves to a file strictly inside base.
+//
+// Both sides are cleaned first, so "a/../../etc/passwd" is rejected, and the
+// comparison is done path-segment-wise rather than with a string prefix: a naive
+// HasPrefix would accept "/data-other/x" for base "/data".
+func WithinDir(base, path string) bool {
+	if base == "" || path == "" {
+		return false
+	}
+	cleanBase := filepath.Clean(base)
+	cleanPath := filepath.Clean(path)
+	if cleanPath == cleanBase {
+		return false
+	}
+	rel, err := filepath.Rel(cleanBase, cleanPath)
+	if err != nil {
+		return false
+	}
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return !filepath.IsAbs(rel)
+}

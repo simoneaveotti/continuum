@@ -273,6 +273,9 @@ For export encryption, see [docs/encryption.md](docs/encryption.md).
 - `ctx sync [--remote=<url>] [--prefer=local|remote] [--force]`
 - `ctx watch [--project=<name>] [--interval=<duration>] [--tui]`
 
+`ctx watch --tui` is navigable: press `?` for live key help, `/` to filter
+events, `p` to filter projects, and `i` to inspect the selected event.
+
 ### Task Management
 
 - `ctx list`

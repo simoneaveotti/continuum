@@ -124,12 +124,12 @@ func BuildContextPackage(ctx *ContextData, task, project string) string {
 	}
 
 	// WORKING STYLE - extract from profile
-	styles := extractWorkingStyle(ctx.Profile)
+	styles := mergeWorkingStyles(ctx.Profile, ctx.Project)
 	if len(styles) > 0 {
 		lines = append(lines, "WORKING STYLE:")
 		for i, s := range styles {
-			if len(styles) > 4 && i >= 4 {
-				// Only show first 4
+			if len(styles) > 8 && i >= 8 {
+				// Keep the context bounded while leaving room for project rules.
 				break
 			}
 			lines = append(lines, fmt.Sprintf("- %s", s))
@@ -569,12 +569,32 @@ func extractWorkingStyle(content string) []string {
 			line = stripPrefix(line, "-")
 			line = stripPrefix(line, "*")
 			line = trimSpace(line)
-			if line != "" && line != "..." && !strings.HasPrefix(line, "#") {
+			if line != "" && line != "..." && !strings.HasPrefix(line, "#") && !strings.HasPrefix(line, "<!--") && !strings.HasPrefix(line, "-->") {
 				items = append(items, line)
 			}
 		}
 	}
 	return items
+}
+
+// mergeWorkingStyles keeps project-specific rules first, then appends global
+// preferences without repeating an identical item.
+func mergeWorkingStyles(profile, project string) []string {
+	styles := append(extractWorkingStyle(project), extractWorkingStyle(profile)...)
+	seen := make(map[string]struct{}, len(styles))
+	result := make([]string, 0, len(styles))
+	for _, style := range styles {
+		key := strings.ToLower(strings.TrimSpace(style))
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, style)
+	}
+	return result
 }
 
 func extractStateSimple(content string) string {

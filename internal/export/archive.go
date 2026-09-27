@@ -16,6 +16,19 @@ import (
 	"continuum/internal/setup"
 )
 
+const maxArchiveBytes int64 = 256 << 20
+
+var errArchiveTooLarge = fmt.Errorf("archive exceeds the %d MiB limit", maxArchiveBytes>>20)
+
+type limitedBuffer struct{ bytes.Buffer }
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	if int64(b.Len()+len(p)) > maxArchiveBytes {
+		return 0, errArchiveTooLarge
+	}
+	return b.Buffer.Write(p)
+}
+
 func resolveOutputPath(customPath, task, suffix string) (string, error) {
 	if customPath != "" {
 		if filepath.Ext(customPath) == "" {
@@ -140,7 +153,7 @@ func writeEncryptedZipArchive(relPaths []string, outputPath, archiveBase string,
 		return "", fmt.Errorf("passphrase error: %w", err)
 	}
 
-	var buf bytes.Buffer
+	var buf limitedBuffer
 	zipWriter := zip.NewWriter(&buf)
 	if err := addManifest(zipWriter, manifest); err != nil {
 		return "", fmt.Errorf("cannot write archive manifest: %w", err)
@@ -151,7 +164,9 @@ func writeEncryptedZipArchive(relPaths []string, outputPath, archiveBase string,
 			return "", fmt.Errorf("cannot add %s to archive: %w", relPath, err)
 		}
 	}
-	zipWriter.Close()
+	if err := zipWriter.Close(); err != nil {
+		return "", fmt.Errorf("cannot finalize encrypted archive: %w", err)
+	}
 
 	encrypted, err := encryptData(buf.Bytes(), passphrase, algo)
 	if err != nil {
@@ -175,6 +190,13 @@ func ImportArchive(zipPath string, decrypt bool, algo EncryptionAlgo) (string, e
 		return "", fmt.Errorf("zip path is required")
 	}
 
+	info, err := os.Stat(zipPath)
+	if err != nil {
+		return "", fmt.Errorf("cannot stat file: %w", err)
+	}
+	if info.Size() > maxArchiveBytes {
+		return "", errArchiveTooLarge
+	}
 	fileData, err := os.ReadFile(zipPath)
 	if err != nil {
 		return "", fmt.Errorf("cannot read file: %w", err)
@@ -189,12 +211,18 @@ func ImportArchive(zipPath string, decrypt bool, algo EncryptionAlgo) (string, e
 		if err != nil {
 			return "", fmt.Errorf("decryption failed: %w", err)
 		}
+		if int64(len(fileData)) > maxArchiveBytes {
+			return "", errArchiveTooLarge
+		}
 	}
 
 	reader := bytes.NewReader(fileData)
 	zipReader, err := zip.NewReader(reader, int64(len(fileData)))
 	if err != nil {
 		return "", fmt.Errorf("invalid zip: %w", err)
+	}
+	if err := validateArchiveSize(zipReader); err != nil {
+		return "", err
 	}
 
 	manifest := readArchiveManifest(zipReader)
@@ -246,6 +274,17 @@ func ImportArchive(zipPath string, decrypt bool, algo EncryptionAlgo) (string, e
 	}
 	_ = events.Append("", taskName, "import", "ok", "task archive imported")
 	return taskName, nil
+}
+
+func validateArchiveSize(zipReader *zip.Reader) error {
+	var total uint64
+	for _, f := range zipReader.File {
+		if f.UncompressedSize64 > uint64(maxArchiveBytes) || total > uint64(maxArchiveBytes)-f.UncompressedSize64 {
+			return errArchiveTooLarge
+		}
+		total += f.UncompressedSize64
+	}
+	return nil
 }
 
 func readArchiveManifest(zipReader *zip.Reader) *ArchiveManifest {

@@ -1,6 +1,7 @@
 package events
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -159,6 +160,51 @@ func TestReadFromOffsetNoFile(t *testing.T) {
 	}
 	if offset != 0 {
 		t.Errorf("expected offset 0, got %d", offset)
+	}
+}
+
+func TestReadTailSkipsInvalidAndUnterminatedRecords(t *testing.T) {
+	base := setupTempDir(t)
+	path := filepath.Join(base, activityRelPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "{\"type\":\"first\"}\nnot-json\n{\"type\":\"second\"}\n{\"type\":\"partial\"}"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	items, offset, err := ReadTail(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if offset != int64(len(content)) {
+		t.Fatalf("offset = %d, want %d", offset, len(content))
+	}
+	if len(items) != 2 || items[0].Type != "first" || items[1].Type != "second" {
+		t.Fatalf("ReadTail() = %+v, want first and second", items)
+	}
+}
+
+func TestReadFromOffsetDetectsRewrittenLog(t *testing.T) {
+	base := setupTempDir(t)
+	path := filepath.Join(base, activityRelPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{\"type\":\"first\"}\n{\"type\":\"second\"}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, offset, err := ReadFromOffset(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{\"type\":\"rewritten\"}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = ReadFromOffset(offset)
+	if !errors.Is(err, ErrLogRewritten) {
+		t.Fatalf("ReadFromOffset() error = %v, want ErrLogRewritten", err)
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"continuum/internal/storagepath"
 )
 
 type Config struct {
@@ -76,23 +78,5 @@ func SetHost(host string) error {
 }
 
 func configPath() string {
-	return filepath.Join(continuumPath(), "local", "identity.json")
-}
-
-func continuumPath() string {
-	if path := os.Getenv("CONTINUUM_PATH"); path != "" {
-		return path
-	}
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		home = os.Getenv("HOME")
-	}
-	if home == "" {
-		home = os.Getenv("USERPROFILE")
-	}
-	if home == "" {
-		cwd, _ := os.Getwd()
-		return filepath.Join(cwd, ".ctx")
-	}
-	return filepath.Join(home, ".ctx")
+	return filepath.Join(storagepath.ContinuumPath(), "local", "identity.json")
 }

@@ -136,9 +136,9 @@ func deriveKeyArgon2(passphrase string, salt []byte, timeCost, memoryCost uint32
 }
 
 func promptPassphrase() (string, error) {
-	return prompt.ReadLine("Enter passphrase: ")
+	return prompt.ReadPassword("Enter passphrase: ")
 }
 
 func promptDecryptPassphrase() (string, error) {
-	return prompt.ReadLine("Enter decryption passphrase: ")
+	return prompt.ReadPassword("Enter decryption passphrase: ")
 }

@@ -11,8 +11,8 @@ import (
 
 // Git implements VCS using the system git binary.
 type Git struct {
-	logPath    string // path to git.log; empty = no logging
-	authorName string // user name for git commits (empty = resolve from git config)
+	logPath     string // path to git.log; empty = no logging
+	authorName  string // user name for git commits (empty = resolve from git config)
 	authorEmail string // user email for git commits (empty = resolve from git config)
 }
 
@@ -296,6 +296,9 @@ func IsGitError(err error) bool {
 func (g *Git) gitEnv() []string {
 	env := os.Environ()
 	env = append(env,
+		// Git diagnostics are parsed in isPathspecError. Keep them stable across
+		// user locales instead of relying on the host language.
+		"LC_ALL=C",
 		"GIT_AUTHOR_NAME="+g.authorName,
 		"GIT_AUTHOR_EMAIL="+g.authorEmail,
 		"GIT_COMMITTER_NAME="+g.authorName,

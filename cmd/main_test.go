@@ -10,6 +10,26 @@ import (
 	"continuum/internal/prompt"
 )
 
+func TestCommandHandler(t *testing.T) {
+	known := []string{
+		"init", "capture", "context", "sync", "resume", "repair", "watch",
+		"search", "artifact", "resolve", "history", "timeline", "diff", "agent",
+		"export", "import", "handoff", "list", "task", "project", "snapshot",
+		"skill", "config",
+	}
+	for _, command := range known {
+		t.Run(command, func(t *testing.T) {
+			handler, ok := commandHandler(command)
+			if !ok || handler == nil {
+				t.Fatalf("commandHandler(%q) = (%v, %v), want handler and true", command, handler, ok)
+			}
+		})
+	}
+	if handler, ok := commandHandler("unknown"); ok || handler != nil {
+		t.Fatalf("commandHandler(unknown) = (%v, %v), want (nil, false)", handler, ok)
+	}
+}
+
 func TestParseCaptureArgs(t *testing.T) {
 	taskName, project, captureType, resolves, autoConfirm := parseCaptureArgs([]string{"my-task", "--project=my-project", "--yes"})
 	if taskName != "my-task" {

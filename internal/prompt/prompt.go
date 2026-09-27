@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mattn/go-isatty"
+	"golang.org/x/term"
 )
 
 // ansiPattern matches ANSI escape sequences used for terminal styling.
@@ -56,6 +57,34 @@ func ReadLine(message string) (string, error) {
 	if err == nil {
 		defer tty.Close()
 		return ReadLineReader(tty)
+	}
+	return readPasswordFallback(os.Stdin)
+}
+
+func readPasswordFallback(r io.Reader) (string, error) {
+	return ReadLineReader(r)
+}
+
+// ReadPassword reads a password without echoing it when a terminal is available.
+// Non-interactive callers retain the ReadLine stdin fallback for automation.
+func ReadPassword(message string) (string, error) {
+	fmt.Print(message)
+	if tty, err := os.Open("/dev/tty"); err == nil {
+		defer tty.Close()
+		value, err := term.ReadPassword(int(tty.Fd()))
+		fmt.Println()
+		if err != nil {
+			return "", fmt.Errorf("cannot read password: %w", err)
+		}
+		return string(value), nil
+	}
+	if IsInteractiveInput() {
+		value, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println()
+		if err != nil {
+			return "", fmt.Errorf("cannot read password: %w", err)
+		}
+		return string(value), nil
 	}
 	return ReadLineReader(os.Stdin)
 }

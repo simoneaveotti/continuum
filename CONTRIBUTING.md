@@ -37,6 +37,15 @@ go test ./... -count=1
 
 All 16 packages must pass before a change is ready.
 
+GitHub Actions enforces the same baseline on pushes and pull requests to
+`develop` and `main`:
+
+```bash
+gofmt -l .
+go vet ./...
+go test ./... -count=1
+```
+
 ## Code Conventions
 
 - **No external public API** — packages in `internal/` are not importable outside the module.

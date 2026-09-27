@@ -68,6 +68,36 @@ Just a project
 	}
 }
 
+func TestExtractWorkingStyleIgnoresTemplateComments(t *testing.T) {
+	profile := `# PROFILE
+
+## Working Preferences
+<!-- example: -->
+<!-- - concise operational summaries -->
+<!-- - surface tradeoffs early -->
+- concise operational summaries
+- preserve existing user decisions
+
+## Rules
+- distinguish facts from assumptions
+`
+	got := extractWorkingStyle(profile)
+	want := []string{"concise operational summaries", "preserve existing user decisions"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("extractWorkingStyle() = %v, want %v", got, want)
+	}
+}
+
+func TestMergeWorkingStylesAppendsProjectRulesWithoutDuplicates(t *testing.T) {
+	profile := "## Working Preferences\n- concise\n- preserve decisions\n"
+	project := "## Working Style\n- preserve decisions\n- use conventional commits\n"
+	got := mergeWorkingStyles(profile, project)
+	want := []string{"preserve decisions", "use conventional commits", "concise"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("mergeWorkingStyles() = %v, want %v", got, want)
+	}
+}
+
 func TestBuildContextPackageConstraintsCap(t *testing.T) {
 	// Build a project.md with 8 constraints — output must cap at 6
 	var sb strings.Builder

@@ -1,56 +1,16 @@
 package task
 
 import (
+	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"slices"
+	"github.com/charmbracelet/lipgloss"
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"continuum/internal/events"
 	"continuum/internal/setup"
-
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-)
-
-// Muted palette for agent colors — no neon
-var agentPalette = []lipgloss.Color{
-	lipgloss.Color("73"),  // steel teal
-	lipgloss.Color("140"), // mauve
-	lipgloss.Color("107"), // sage
-	lipgloss.Color("179"), // amber
-	lipgloss.Color("110"), // slate blue
-	lipgloss.Color("174"), // dusty rose
-	lipgloss.Color("115"), // seafoam
-	lipgloss.Color("183"), // lavender
-}
-
-var (
-	colorSep       = lipgloss.Color("237")
-	colorMuted     = lipgloss.Color("241")
-	colorDim       = lipgloss.Color("245")
-	colorText      = lipgloss.Color("251")
-	colorAccent    = lipgloss.Color("73")
-	colorSelBg     = lipgloss.Color("238")
-	colorBarBg     = lipgloss.Color("232")
-	colorPayloadBg = lipgloss.Color("233")
-
-	tuiBarStyle      = lipgloss.NewStyle().Foreground(colorDim).Background(colorBarBg).Padding(0, 1)
-	tuiSectionTitle  = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
-	tuiSepStyle      = lipgloss.NewStyle().Foreground(colorSep)
-	tuiHeaderRow     = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
-	tuiSelectedRow   = lipgloss.NewStyle().Foreground(lipgloss.Color("255")).Background(colorSelBg).Bold(true)
-	tuiMuted         = lipgloss.NewStyle().Foreground(colorMuted)
-	tuiLabel         = lipgloss.NewStyle().Foreground(colorDim)
-	tuiBorderColor   = colorSep // kept for compatibility
-	tuiOkStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("71"))
-	tuiErrStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("167"))
-	tuiRunningStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("136"))
-	tuiDefaultStatus = lipgloss.NewStyle().Foreground(colorMuted)
-	tuiDefaultCell   = lipgloss.NewStyle().Foreground(colorText)
-	tuiPayloadLine   = lipgloss.NewStyle().Foreground(colorText).Background(colorPayloadBg)
 )
 
 type tuiTickMsg struct{}
@@ -58,20 +18,94 @@ type tuiTickMsg struct{}
 const maxLegendAgents = 5
 
 type watchTUIModel struct {
-	projects    []string
-	allProjects []string
-	filterIndex int
-	interval    time.Duration
-	offset      int64
-	events      []events.Event
-	selected    int
-	payloadTop  int
-	width       int
-	height      int
+	projects      []string
+	allProjects   []string
+	filterIndex   int
+	interval      time.Duration
+	offset        int64
+	events        []events.Event
+	selected      int
+	payloadTop    int
+	width         int
+	height        int
 	showAllAgents bool
-	agentColors map[string]lipgloss.Color
-	agentOrder  []string
+	agentColors   map[string]lipgloss.Color
+	agentOrder    []string
+
+	// payload caches the resolved body of the selected event. View() must never
+	// read it from disk: View runs on every tick, keypress and resize, and a
+	// payload can be a full context dump.
+	payload      string
+	payloadFor   int
+	payloadValid bool
+
+	// watchErr holds the last activity-log read failure so the TUI can show it
+	// instead of silently retrying.
+	watchErr string
+	// dropped counts events discarded by trimEvents, surfaced in the header.
+	dropped int
+
+	// search state. matched mirrors events, filtered by query; the renderers
+	// read through display() so an empty query costs nothing.
+	searching bool
+	query     string
+	draft     string
+	matched   []events.Event
+
+	projectPicking  bool
+	projectDraft    string
+	projectSelected int
+
+	// help toggles the keybinding overlay.
+	help       bool
+	helpScroll int
+
+	// info shows the extended record of the selected event. It is a modal: the
+	// table row elides precision on purpose, and this is where the full values
+	// are available without giving them a permanent column.
+	info bool
 }
+
+// recomputeDraft applies the in-progress search text without leaving search
+// mode, so the list narrows live as the user types.
+
+// display returns the events the renderers should draw. With no active query
+// this is the full buffer, so filtering costs a slice header, not a copy.
+
+// display returns the events the renderers should draw. With no active query
+// this is the full buffer, so filtering costs a slice header, not a copy.
+// watchLayout is the single source of truth for the vertical split. View and
+// clampPayloadTop must agree, otherwise the payload can be scrolled past the
+// last line that is actually on screen.
+
+// watchLayout is the single source of truth for the vertical split. View and
+// clampPayloadTop must agree, otherwise the payload can be scrolled past the
+// last line that is actually on screen.
+
+// watchLayout is the single source of truth for the vertical split. View and
+// clampPayloadTop must agree, otherwise the payload can be scrolled past the
+// last line that is actually on screen.
+func watchLayout(width, height int) (bodyH, topH, bottomH int) {
+	_ = width
+	// chrome = header(1) + legend(1) + hSep(1) + footer(1). The body must be
+	// exactly height-4: a floor here makes the view taller than the terminal
+	// on short screens, which is the scroll drift this layout exists to avoid.
+	bodyH = max(0, height-4)
+	if bodyH < 2 {
+		return bodyH, 0, 0
+	}
+	topH = max(1, (bodyH*60)/100)
+	bottomH = bodyH - topH
+	if bottomH < 1 {
+		bottomH = 1
+		topH = bodyH - 1
+	}
+	return bodyH, topH, bottomH
+}
+
+// watchColumns is the single source of truth for the horizontal split.
+
+// watchColumns is the single source of truth for the horizontal split.
 
 func WatchTUI(project string, interval time.Duration) error {
 	if interval <= 0 {
@@ -89,7 +123,9 @@ func WatchTUI(project string, interval time.Duration) error {
 		return fmt.Errorf("no projects found")
 	}
 
-	items, offset, err := events.ReadFromOffset(0)
+	// Read only the tail: the activity log grows without bound and parsing all
+	// of it to keep the newest maxWatchEvents wasted ~40x the work.
+	items, offset, err := events.ReadTail(maxWatchEvents)
 	if err != nil {
 		return err
 	}
@@ -119,26 +155,77 @@ func (m watchTUIModel) Init() tea.Cmd {
 func (m watchTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.projectPicking {
+			return m.updateProjectPicker(msg)
+		}
+		if m.searching {
+			return m.updateSearch(msg)
+		}
+		if m.info {
+			switch msg.String() {
+			case "q", "ctrl+c", "esc", "i", "enter":
+				m.info = false
+			}
+			return m, nil
+		}
+		if m.help {
+			switch msg.String() {
+			case "q", "ctrl+c", "esc", "?":
+				m.help = false
+			case "j", "down":
+				m.helpScroll++
+			case "k", "up":
+				m.helpScroll = max(0, m.helpScroll-1)
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "?":
+			m.help = true
+			m.helpScroll = 0
+			return m, nil
+		case "i", "enter":
+			if len(m.display()) > 0 {
+				m.info = true
+			}
+			return m, nil
+		case "/":
+			m.searching = true
+			m.draft = m.query
+			m.recomputeDraft()
+			return m, nil
+		case "esc":
+			if m.query != "" {
+				m.query = ""
+				m.draft = ""
+				m.matched = nil
+				m.clampSelection()
+				m.resolvePayload()
+			}
+			return m, nil
 		case "up", "k":
 			if m.selected > 0 {
 				m.selected--
 				m.payloadTop = 0
+				m.resolvePayload()
 			}
 		case "down", "j":
-			if m.selected < len(m.events)-1 {
+			if m.selected < len(m.display())-1 {
 				m.selected++
 				m.payloadTop = 0
+				m.resolvePayload()
 			}
 		case "g":
 			m.selected = 0
 			m.payloadTop = 0
+			m.resolvePayload()
 		case "G":
-			if len(m.events) > 0 {
-				m.selected = len(m.events) - 1
+			if display := m.display(); len(display) > 0 {
+				m.selected = len(display) - 1
 				m.payloadTop = 0
+				m.resolvePayload()
 			}
 		case "pgdown", "f":
 			m.payloadTop += 10
@@ -149,7 +236,9 @@ func (m watchTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.payloadTop = 0
 			}
 		case "p":
-			m.cycleProjectFilter()
+			m.projectPicking = true
+			m.projectDraft = ""
+			m.projectSelected = 0
 		case "P":
 			m.setProjectFilter(nil)
 		case "a":
@@ -162,11 +251,8 @@ func (m watchTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tuiTickMsg:
 		wasAtTop := len(m.events) == 0 || m.selected == 0
-		var selectedEvent events.Event
+		previous := m.selected
 		hadSelection := len(m.events) > 0 && m.selected >= 0 && m.selected < len(m.events)
-		if hadSelection {
-			selectedEvent = m.events[m.selected]
-		}
 
 		items, offset, err := events.ReadFromOffset(m.offset)
 		if err == nil && len(items) > 0 {
@@ -179,18 +265,25 @@ func (m watchTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selected = 0
 				m.payloadTop = 0
 			} else if hadSelection {
-				next := findEventIndex(m.events, selectedEvent)
-				if next != m.selected {
+				if next := m.trackSelection(previous); next != previous {
 					m.payloadTop = 0
 				}
-				m.selected = next
 			}
 			if m.selected >= len(m.events) {
 				m.selected = max(0, len(m.events)-1)
 				m.payloadTop = 0
 			}
+			m.resolvePayload()
 		} else if err == nil {
 			m.offset = offset
+		} else if errors.Is(err, events.ErrLogRewritten) {
+			// The log changed under us, usually ctx repair --activity. Re-read
+			// the tail and say so: a silent resync is indistinguishable from an
+			// agent that stopped working.
+			m.resyncAfterRewrite()
+		} else {
+			// Surface read failures instead of silently retrying forever.
+			m.watchErr = err.Error()
 		}
 		return m, tuiTickCmd(m.interval)
 	}
@@ -205,576 +298,172 @@ func (m watchTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 //	─── separator ───  (1 line)
 //	Payload  (bottomH lines, full width)
 //	footer bar  (1 line)
+
+// View renders the layout:
+//
+//	header bar  (1 line)
+//	agent legend (1 line)
+//	[Events | Details]  (topH lines, split ~62/38)
+//	─── separator ───  (1 line)
+//	Payload  (bottomH lines, full width)
+//	footer bar  (1 line)
+
+// View renders the layout:
+//
+//	header bar  (1 line)
+//	agent legend (1 line)
+//	[Events | Details]  (topH lines, split ~62/38)
+//	─── separator ───  (1 line)
+//	Payload  (bottomH lines, full width)
+//	footer bar  (1 line)
 func (m watchTUIModel) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "Loading watch TUI..."
 	}
+	if m.info {
+		return m.renderEventInfo(m.width, m.height)
+	}
 
-	// chrome = header(1) + legend(1) + hSep(1) + footer(1) = 4
-	bodyH := max(10, m.height-4)
-	topH := (bodyH * 60) / 100
-	bottomH := bodyH - topH
+	_, topH, bottomH := watchLayout(m.width, m.height)
+	header := tuiBarStyle.Width(m.width).MaxWidth(m.width).Render(m.renderHeaderBar())
+	// Like the footer, the legend must be truncated rather than wrapped: an extra
+	// line anywhere makes the whole view one row taller than the terminal.
+	legend := lipgloss.NewStyle().Width(m.width).MaxWidth(m.width).Render(
+		truncateCells(m.renderLegend(), m.width),
+	)
 
-	leftW := (m.width * 70) / 100
-	rightW := max(1, m.width-leftW-1) // -1 for vertical sep
+	var topSection string
+	if m.projectPicking {
+		topSection = m.renderProjectPicker(m.width, topH)
+	} else if m.help {
+		topSection = m.renderHelp(m.width, topH)
+	} else {
+		// The event table spans the full width: Detail lives in a row and
+		// Status is a single icon cell, so there is nothing left to justify a
+		// second column.
+		topSection = m.renderEventsSection(m.width, topH)
+	}
 
-	header := tuiBarStyle.Width(m.width).Render(m.renderHeaderBar())
-	legend := lipgloss.NewStyle().Width(m.width).Render(m.renderLegend())
-
-	eventsStr := m.renderEventsSection(leftW, topH)
-	detailsStr := m.renderDetailsSection(rightW, topH)
-	topSection := joinColumnsWithSep(eventsStr, detailsStr, topH)
-
-	hSep := tuiSepStyle.Render(strings.Repeat("─", m.width))
+	hSep := tuiSepStyle.Width(m.width).MaxWidth(m.width).Render(strings.Repeat("─", m.width))
 
 	payloadStr := m.renderPayloadSection(m.width, bottomH)
 
-	footer := tuiBarStyle.Width(m.width).Render(
-		"  q quit  ·  j/k events  ·  g/G first/last  ·  f/b payload ↑↓  ·  a agents  ·  p next project  ·  P all",
+	// The footer must never wrap: an extra line here makes the whole view one
+	// line taller than the terminal, which scrolls the alt-screen on every
+	// frame and slowly walks the layout off screen.
+	footerText := "  q quit  ·  / search  ·  j/k events  ·  f/b payload  ·  g/G ends  ·  i details  ·  a agents  ·  ? help"
+	if m.searching {
+		footerText = "  /" + m.draft + "▏   (enter keep · esc cancel)"
+	} else if m.projectPicking {
+		footerText = "  p " + m.projectDraft + "▏   (enter select · esc cancel)"
+	}
+	footer := tuiBarStyle.Width(m.width).MaxWidth(m.width).Render(
+		truncateCells(footerText, m.width-2),
 	)
 
 	return strings.Join([]string{header, legend, topSection, hSep, payloadStr, footer}, "\n")
 }
 
-func (m watchTUIModel) renderHeaderBar() string {
-	pos := "0/0"
-	if len(m.events) > 0 {
-		pos = fmt.Sprintf("%d/%d", m.selected+1, len(m.events))
-	}
-	scopeLabel := "all projects"
-	if len(m.projects) > 0 {
-		scopeLabel = "project: " + strings.Join(m.projects, ",")
-	}
-	left := fmt.Sprintf("continuum watch  ·  %s  ·  %d events  ·  %d agents  ·  ↻ %s",
-		scopeLabel, len(m.events), len(m.agentOrder), m.interval)
-	// right-align pos; Padding(0,1) adds 2 chars so available = width-2
-	available := m.width - 2
-	gap := available - len(left) - len(pos)
-	if gap < 1 {
-		gap = 1
-	}
-	return left + strings.Repeat(" ", gap) + pos
-}
-
-func (m watchTUIModel) renderLegend() string {
-	if len(m.agentOrder) == 0 {
-		return tuiMuted.Render("  no agents")
-	}
-	visibleAgents := m.visibleAgents()
-	parts := make([]string, 0, len(visibleAgents))
-	for _, agent := range visibleAgents {
-		agentStyle := lipgloss.NewStyle().Foreground(m.agentColors[agent])
-		parts = append(parts, agentStyle.Render("● "+agent))
-	}
-	if hiddenCount := len(m.agentOrder) - len(visibleAgents); hiddenCount > 0 {
-		parts = append(parts, tuiMuted.Render(fmt.Sprintf("+%d", hiddenCount)))
-	}
-	return "  " + strings.Join(parts, "   ")
-}
-
-func (m watchTUIModel) renderEventsSection(width, height int) string {
-	titleLine := renderSectionHeader("Events", width)
-
-	timeW := 16
-	gapW := 1
-	agentW := 10
-	typeW := 12
-	typeStatusGapW := 1
-	statusW := 10
-	targetW := max(12, width-timeW-gapW-agentW-typeW-typeStatusGapW-statusW-4)
-
-	headerLine := lipgloss.JoinHorizontal(lipgloss.Left,
-		renderCell("Time", timeW, tuiHeaderRow),
-		renderCell("", gapW, tuiHeaderRow),
-		renderCell("Agent", agentW, tuiHeaderRow),
-		renderCell("Project/Task", targetW, tuiHeaderRow),
-		renderCell("Type", typeW, tuiHeaderRow),
-		renderCell("", typeStatusGapW, tuiHeaderRow),
-		renderCell("Status", statusW, tuiHeaderRow),
-	)
-	sepLine := tuiSepStyle.Width(width).Render(strings.Repeat("─", width))
-
-	fixed := []string{titleLine, headerLine, sepLine}
-	rowsH := max(1, height-len(fixed))
-
-	var eventRows []string
-	if len(m.events) == 0 {
-		eventRows = []string{tuiMuted.Width(width).Render("  no events yet")}
-	} else {
-		windowStart := m.selected - rowsH/2
-		if windowStart < 0 {
-			windowStart = 0
+func (m watchTUIModel) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.projectPicking = false
+	case tea.KeyEnter:
+		matches := m.matchingProjects()
+		if len(matches) > 0 {
+			m.setProjectFilter([]string{matches[m.clampProjectSelection(m.projectSelected)]})
 		}
-		if windowStart+rowsH > len(m.events) {
-			windowStart = max(0, len(m.events)-rowsH)
+		m.projectPicking = false
+	case tea.KeyUp:
+		m.projectSelected = max(0, m.projectSelected-1)
+	case tea.KeyDown:
+		m.projectSelected = m.clampProjectSelection(m.projectSelected + 1)
+	case tea.KeyBackspace:
+		if runes := []rune(m.projectDraft); len(runes) > 0 {
+			m.projectDraft = string(runes[:len(runes)-1])
 		}
-		windowEnd := min(len(m.events), windowStart+rowsH)
-
-		for i := windowStart; i < windowEnd; i++ {
-			item := m.events[i]
-			agent := normalizedAgent(item.Agent)
-			target := eventTarget(item)
-			baseStyle := tuiDefaultCell
-			if i == m.selected {
-				baseStyle = tuiSelectedRow
-			}
-			statusVal := statusIcon(item.Status) + " " + item.Status
-			row := lipgloss.JoinHorizontal(lipgloss.Left,
-				renderCell(shortTS(item.Timestamp), timeW, baseStyle),
-				renderCell("", gapW, baseStyle),
-				renderCell(agent, agentW, baseStyle.Copy().Foreground(m.agentColors[agent]).Bold(true)),
-				renderCell(target, targetW, baseStyle),
-				renderCell(item.Type, typeW, baseStyle),
-				renderCell("", typeStatusGapW, baseStyle),
-				renderCell(statusVal, statusW, mergeStyles(baseStyle, statusTextStyle(item.Status))),
-			)
-			eventRows = append(eventRows, row)
-		}
+	case tea.KeyRunes:
+		m.projectDraft += string(msg.Runes)
+		m.projectSelected = 0
+	case tea.KeyCtrlC:
+		return m, tea.Quit
 	}
-
-	lines := append(fixed, eventRows...)
-	return fitRenderedLines(lines, width, height)
+	return m, nil
 }
 
-func (m watchTUIModel) renderDetailsSection(width, height int) string {
-	titleLine := renderSectionHeader("Details", width)
-
-	var detailLines []string
-	if len(m.events) == 0 {
-		detailLines = []string{tuiMuted.Render("  no event selected")}
-	} else {
-		item := m.events[m.selected]
-		detailLines = []string{
-			renderKV("Time", detailTS(item.Timestamp), width),
-			renderKV("Agent", normalizedAgent(item.Agent), width),
-			renderKV("Host", item.Host, width),
-			renderKV("Project", item.Project, width),
-			renderKV("Task", item.Task, width),
-			renderKV("Type", item.Type, width),
-			renderKV("Status", statusIcon(item.Status)+" "+item.Status, width),
-		}
-		if item.File != "" {
-			detailLines = append(detailLines, renderKV("File", filepath.Base(item.File), width))
-		}
-	}
-
-	lines := append([]string{titleLine}, detailLines...)
-	return fitRenderedLines(lines, width, height)
-}
-
-func (m watchTUIModel) renderPayloadSection(width, height int) string {
-	title := "Payload"
-	if len(m.events) > 0 && m.events[m.selected].File != "" {
-		title = "Payload  " + filepath.Base(m.events[m.selected].File)
-	}
-
-	var content string
-	if len(m.events) == 0 {
-		content = "no payload"
-	} else {
-		item := m.events[m.selected]
-		content = strings.TrimSpace(readEventPayload(item))
-		if content == "" {
-			content = item.Detail
-		}
-		if content == "" {
-			content = "no payload"
-		}
-	}
-
-	// Scroll indicator appended to title when scrolled
-	wrappedLines := wrapLines(content, max(1, width-2))
-	totalLines := len(wrappedLines)
-	scrollIndicator := ""
-	if m.payloadTop > 0 {
-		scrollIndicator = fmt.Sprintf("  ↑↓ line %d/%d", m.payloadTop+1, totalLines)
-	}
-	titleLine := renderSectionHeader(title+scrollIndicator, width)
-
-	contentH := max(1, height-1)
-	rawLines := fitWrappedLinesWindow(wrappedLines, contentH, m.payloadTop)
-
-	// Render content lines with dark payload background
-	rendered := make([]string, 0, height)
-	rendered = append(rendered, titleLine)
-	for _, line := range rawLines {
-		rendered = append(rendered, tuiPayloadLine.Width(width).MaxWidth(width).Render("  "+line))
-		if len(rendered) == height {
-			break
-		}
-	}
-	for len(rendered) < height {
-		rendered = append(rendered, tuiPayloadLine.Width(width).Render(""))
-	}
-	return strings.Join(rendered, "\n")
-}
-
-func readEventPayload(item events.Event) string {
-	if item.File == "" {
-		return ""
-	}
-	fullPath := filepath.Join(setup.ContinuumPath(), filepath.FromSlash(item.File))
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		return ""
-	}
-	return string(data)
-}
-
-// renderSectionHeader renders "- Title -───────────────" spanning width.
-func renderSectionHeader(title string, width int) string {
-	titleStr := tuiSectionTitle.Render("- " + title + " -")
-	titleW := lipgloss.Width(titleStr)
-	lineW := max(0, width-titleW-1)
-	return titleStr + tuiSepStyle.Render(strings.Repeat("─", lineW))
-}
-
-// joinColumnsWithSep merges two multi-line strings side by side with a │ separator.
-func joinColumnsWithSep(left, right string, height int) string {
-	leftLines := strings.Split(left, "\n")
-	rightLines := strings.Split(right, "\n")
-	sep := tuiSepStyle.Render("│")
-	rows := make([]string, height)
-	for i := range rows {
-		l, r := "", ""
-		if i < len(leftLines) {
-			l = leftLines[i]
-		}
-		if i < len(rightLines) {
-			r = rightLines[i]
-		}
-		rows[i] = l + sep + r
-	}
-	return strings.Join(rows, "\n")
-}
-
-// renderKV renders "  label:   value" with fixed label column.
-func renderKV(label, value string, width int) string {
-	labelStr := tuiLabel.Render(fmt.Sprintf("  %-9s", label+":"))
-	labelW := lipgloss.Width(labelStr)
-	valueW := max(1, width-labelW)
-	return labelStr + tuiDefaultCell.Width(valueW).MaxWidth(valueW).Render(trim(value, valueW))
-}
-
-func statusIcon(status string) string {
-	switch strings.ToLower(status) {
-	case "ok", "success", "done", "completed":
-		return "✓"
-	case "error", "failed", "failure":
-		return "✗"
-	case "running", "in_progress":
-		return "⟳"
-	default:
-		return "·"
-	}
-}
-
-func (m *watchTUIModel) assignColors(items []events.Event) {
-	if m.agentColors == nil {
-		m.agentColors = map[string]lipgloss.Color{}
-	}
-	for _, item := range items {
-		agent := normalizedAgent(item.Agent)
-		if _, ok := m.agentColors[agent]; ok {
-			continue
-		}
-		m.agentColors[agent] = agentPalette[len(m.agentOrder)%len(agentPalette)]
-		m.agentOrder = append(m.agentOrder, agent)
-	}
-}
-
-func (m *watchTUIModel) clampPayloadTop() {
-	if len(m.events) == 0 || m.height == 0 {
-		m.payloadTop = 0
-		return
-	}
-	item := m.events[m.selected]
-	content := strings.TrimSpace(readEventPayload(item))
-	if content == "" {
-		content = item.Detail
-	}
-	totalLines := len(wrapLines(content, max(1, m.width-2)))
-	bodyH := max(10, m.height-4)
-	topH := (bodyH * 62) / 100
-	bottomH := bodyH - topH
-	contentH := max(1, bottomH-1) // -1 for section title line
-	maxTop := max(0, totalLines-contentH)
-	if m.payloadTop > maxTop {
-		m.payloadTop = maxTop
-	}
-}
-
-func (m *watchTUIModel) trimEvents() {
-	const maxEvents = 200
-	if len(m.events) <= maxEvents {
-		return
-	}
-	m.events = m.events[:maxEvents]
-	if m.selected >= len(m.events) {
-		m.selected = max(0, len(m.events)-1)
-	}
-}
-
-func (m *watchTUIModel) cycleProjectFilter() {
-	if len(m.allProjects) == 0 {
-		return
-	}
-	m.filterIndex = (m.filterIndex + 1) % (len(m.allProjects) + 1)
-	if m.filterIndex == 0 {
-		m.setProjectFilter(nil)
-		return
-	}
-	m.setProjectFilter([]string{m.allProjects[m.filterIndex-1]})
-}
-
-func (m *watchTUIModel) setProjectFilter(projects []string) {
-	m.projects = append([]string(nil), projects...)
-	m.filterIndex = projectFilterIndex(m.projects, m.allProjects)
-	m.events = sortEventsNewestFirst(filterEvents(readAllEvents(), m.projects))
-	m.selected = 0
-	m.payloadTop = 0
-	m.assignColors(m.events)
-	m.trimEvents()
-}
-
-func projectFilterIndex(scope, allProjects []string) int {
-	if len(scope) == 0 {
+// clampProjectSelection keeps the highlighted project inside the match list.
+// It never returns a negative: a negative index stored on the model is what let
+// Enter reach matches[-1] and panic. With nothing matching the index is
+// meaningless, so it pins to 0 and callers must check the list is not empty.
+func (m watchTUIModel) clampProjectSelection(candidate int) int {
+	limit := len(m.matchingProjects())
+	if limit == 0 {
 		return 0
 	}
-	if len(scope) == 1 {
-		for i, project := range allProjects {
-			if project == scope[0] {
-				return i + 1
-			}
+	return max(0, min(limit-1, candidate))
+}
+
+func (m watchTUIModel) matchingProjects() []string {
+	needle := strings.ToLower(m.projectDraft)
+	var matches []string
+	for _, project := range m.allProjects {
+		if strings.Contains(strings.ToLower(project), needle) {
+			matches = append(matches, project)
 		}
 	}
-	return 0
-}
-
-func readAllEvents() []events.Event {
-	items, _, err := events.ReadFromOffset(0)
-	if err != nil {
-		return nil
-	}
-	return items
-}
-
-func filterEvents(items []events.Event, projects []string) []events.Event {
-	if len(projects) == 0 {
-		return items
-	}
-	var filtered []events.Event
-	for _, item := range items {
-		if item.Project == "" || slices.Contains(projects, item.Project) {
-			filtered = append(filtered, item)
-		}
-	}
-	return filtered
-}
-
-func shortTS(value string) string {
-	parsed, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		return value
-	}
-	return parsed.Format("2006-01-02 15:04")
-}
-
-func detailTS(value string) string {
-	parsed, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		return value
-	}
-	return parsed.Format("2006-01-02 15:04:05")
-}
-
-func trim(value string, width int) string {
-	if width <= 0 || len(value) <= width {
-		return value
-	}
-	if width <= 1 {
-		return value[:width]
-	}
-	return value[:width-1] + "…"
-}
-
-func fitLines(content string, width, height int) string {
-	if height <= 0 || width <= 0 {
-		return ""
-	}
-	lines := strings.Split(content, "\n")
-	fitted := make([]string, 0, height)
-	for _, line := range lines {
-		fitted = append(fitted, trim(line, width))
-		if len(fitted) == height {
-			return strings.Join(fitted, "\n")
-		}
-	}
-	for len(fitted) < height {
-		fitted = append(fitted, "")
-	}
-	return strings.Join(fitted, "\n")
-}
-
-func fitLinesWindow(content string, width, height, start int) string {
-	if height <= 0 || width <= 0 {
-		return ""
-	}
-	lines := strings.Split(content, "\n")
-	if start < 0 {
-		start = 0
-	}
-	if start > len(lines)-1 {
-		start = max(0, len(lines)-1)
-	}
-	windowEnd := min(len(lines), start+height)
-	fitted := make([]string, 0, height)
-	for _, line := range lines[start:windowEnd] {
-		fitted = append(fitted, trim(line, width))
-	}
-	for len(fitted) < height {
-		fitted = append(fitted, "")
-	}
-	return strings.Join(fitted, "\n")
-}
-
-func wrapLines(content string, width int) []string {
-	if width <= 0 {
-		return []string{""}
-	}
-	lines := strings.Split(content, "\n")
-	wrapped := make([]string, 0, len(lines))
-	for _, line := range lines {
-		if line == "" {
-			wrapped = append(wrapped, "")
-			continue
-		}
-		for len(line) > width {
-			wrapped = append(wrapped, line[:width])
-			line = line[width:]
-		}
-		wrapped = append(wrapped, line)
-	}
-	if len(wrapped) == 0 {
-		return []string{""}
-	}
-	return wrapped
-}
-
-func fitWrappedLinesWindow(lines []string, height, start int) []string {
-	if height <= 0 {
-		return nil
-	}
-	if len(lines) == 0 {
-		lines = []string{""}
-	}
-	if start < 0 {
-		start = 0
-	}
-	if start > len(lines)-1 {
-		start = max(0, len(lines)-1)
-	}
-	windowEnd := min(len(lines), start+height)
-	fitted := make([]string, 0, height)
-	fitted = append(fitted, lines[start:windowEnd]...)
-	for len(fitted) < height {
-		fitted = append(fitted, "")
-	}
-	return fitted
-}
-
-func fitRenderedLines(lines []string, width, height int) string {
-	if height <= 0 || width <= 0 {
-		return ""
-	}
-	fitted := make([]string, 0, height)
-	for _, line := range lines {
-		fitted = append(fitted, lipgloss.NewStyle().Width(width).MaxWidth(width).Render(line))
-		if len(fitted) == height {
-			return strings.Join(fitted, "\n")
-		}
-	}
-	for len(fitted) < height {
-		fitted = append(fitted, lipgloss.NewStyle().Width(width).Render(""))
-	}
-	return strings.Join(fitted, "\n")
-}
-
-func renderCell(value string, width int, style lipgloss.Style) string {
-	return style.Width(width).MaxWidth(width).Render(trim(value, width))
-}
-
-func mergeStyles(base, overlay lipgloss.Style) lipgloss.Style {
-	if fg := overlay.GetForeground(); fg != nil {
-		base = base.Foreground(fg)
-	}
-	if bg := overlay.GetBackground(); bg != nil {
-		base = base.Background(bg)
-	}
-	if overlay.GetBold() {
-		base = base.Bold(true)
-	}
-	return base
-}
-
-func statusTextStyle(status string) lipgloss.Style {
-	switch strings.ToLower(status) {
-	case "ok", "success", "done", "completed":
-		return tuiOkStyle
-	case "error", "failed", "failure":
-		return tuiErrStyle
-	case "running", "in_progress":
-		return tuiRunningStyle
-	default:
-		return tuiDefaultStatus
-	}
-}
-
-func normalizedAgent(agent string) string {
-	if strings.TrimSpace(agent) == "" {
-		return "unknown"
-	}
-	return agent
-}
-
-func (m watchTUIModel) visibleAgents() []string {
-	if m.showAllAgents {
-		return append([]string(nil), m.agentOrder...)
-	}
-	return visibleAgentOrder(m.agentOrder, maxLegendAgents)
-}
-
-func visibleAgentOrder(agentOrder []string, limit int) []string {
-	if limit <= 0 || len(agentOrder) <= limit {
-		return append([]string(nil), agentOrder...)
-	}
-	return append([]string(nil), agentOrder[len(agentOrder)-limit:]...)
-}
-
-func sortEventsNewestFirst(items []events.Event) []events.Event {
-	sorted := append([]events.Event(nil), items...)
-	slices.SortStableFunc(sorted, func(a, b events.Event) int {
-		switch {
-		case a.Timestamp > b.Timestamp:
-			return -1
-		case a.Timestamp < b.Timestamp:
-			return 1
-		default:
-			return 0
-		}
-	})
-	return sorted
-}
-
-func findEventIndex(items []events.Event, target events.Event) int {
-	for i, item := range items {
-		if item == target {
-			return i
-		}
-	}
-	return 0
+	return matches
 }
 
 func tuiTickCmd(interval time.Duration) tea.Cmd {
 	return tea.Tick(interval, func(time.Time) tea.Msg { return tuiTickMsg{} })
 }
+
+// recomputeDraft applies the in-progress search text without leaving search
+// mode, so the list narrows live as the user types.
+func (m *watchTUIModel) recomputeDraft() {
+	m.query = m.draft
+	m.recomputeMatch()
+	m.clampSelection()
+	m.resolvePayload()
+}
+
+// updateSearch handles keys while the search prompt is open.
+
+// updateSearch handles keys while the search prompt is open.
+
+// updateSearch handles keys while the search prompt is open.
+func (m watchTUIModel) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		// Abandon the edit, keep the previous committed filter.
+		m.searching = false
+		m.draft = m.query
+		return m, nil
+	case tea.KeyEnter:
+		m.searching = false
+		m.query = m.draft
+		m.recomputeMatch()
+		m.clampSelection()
+		m.resolvePayload()
+		return m, nil
+	case tea.KeyBackspace:
+		if m.draft != "" {
+			runes := []rune(m.draft)
+			m.draft = string(runes[:len(runes)-1])
+		}
+	case tea.KeySpace:
+		m.draft += " "
+	case tea.KeyRunes:
+		m.draft += string(msg.Runes)
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	default:
+		return m, nil
+	}
+	m.recomputeDraft()
+	return m, nil
+}
+
+// helpRows is the content of the ? overlay.
+
+// helpRows is the content of the ? overlay.

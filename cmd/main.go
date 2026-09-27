@@ -28,6 +28,13 @@ func main() {
 		printVersion()
 		return
 	}
+	if command != "watch" && command != "init" {
+		release, err := setup.AcquireStorageLock()
+		if err != nil {
+			die(err)
+		}
+		defer release()
+	}
 
 	dispatchCommand(command, os.Args[2:])
 }

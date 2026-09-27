@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -106,6 +107,15 @@ func TestGit_Commit_NothingToCommit(t *testing.T) {
 	if err := g.Commit(dir, "test: empty", []string{"nonexistent.md"}); err != nil {
 		t.Fatalf("Commit() with nothing staged should not error, got: %v", err)
 	}
+}
+
+func TestGitEnvForcesCLocale(t *testing.T) {
+	for _, value := range NewGit("").gitEnv() {
+		if value == "LC_ALL=C" {
+			return
+		}
+	}
+	t.Fatalf("git environment does not contain LC_ALL=C: %s", strings.Join(NewGit("").gitEnv(), " "))
 }
 
 func TestGit_Commit_EmptyFiles(t *testing.T) {

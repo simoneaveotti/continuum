@@ -77,6 +77,16 @@ func TestReadLineTrimsCRLF(t *testing.T) {
 	}
 }
 
+func TestReadPasswordFallback(t *testing.T) {
+	got, err := readPasswordFallback(strings.NewReader("secret\r\n"))
+	if err != nil {
+		t.Fatalf("readPasswordFallback() error: %v", err)
+	}
+	if got != "secret" {
+		t.Fatalf("readPasswordFallback() = %q, want secret", got)
+	}
+}
+
 func TestReadLineReturnsErrorOnReadFailure(t *testing.T) {
 	_, err := ReadLineReader(&errReader{errors.New("read error")})
 	if err == nil {
