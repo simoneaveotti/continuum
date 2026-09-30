@@ -2,83 +2,11 @@ package context
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
-	"continuum/internal/filestore"
 	"continuum/internal/parse"
-	"continuum/internal/setup"
-	"continuum/internal/task"
 )
-
-type CollaborationArtifacts struct {
-	ProposalCount  int
-	RequestCount   int
-	LatestProposal string
-	LatestRequest  string
-	LatestResponse string
-	LatestDecision string
-}
-
-func LoadFullContext(project string) (*ContextData, error) {
-	if err := setup.ValidateProjectName(project); err != nil {
-		return nil, err
-	}
-
-	base := setup.ContinuumPath()
-
-	if err := setup.PullLatest(); err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-	}
-
-	profile, err := os.ReadFile(filepath.Join(base, "profile.md"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			profile = []byte("# Profile\n\n(No profile set)")
-		} else {
-			return nil, fmt.Errorf("cannot read profile: %w", err)
-		}
-	}
-
-	projectData, err := os.ReadFile(filepath.Join(base, "projects", project, "project.md"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			projectData = []byte("# Project\n\n(No project context)")
-		} else {
-			return nil, fmt.Errorf("cannot read project: %w", err)
-		}
-	}
-
-	tasksDir := filepath.Join(base, "projects", project, "tasks")
-	tasks := []string{}
-	if _, err := os.Stat(tasksDir); err == nil {
-		taskInfos, err := task.ListWithStatus(project, string(task.StatusActive))
-		if err != nil {
-			return nil, err
-		}
-		for _, info := range taskInfos {
-			tasks = append(tasks, info.Name)
-		}
-	}
-
-	taskContexts := make(map[string]*ContextData)
-	for _, t := range tasks {
-		if tc, err := load(t, project, false); err == nil {
-			taskContexts[t] = tc
-		}
-	}
-
-	return &ContextData{
-		Profile:      string(profile),
-		Project:      string(projectData),
-		Snapshot:     strings.Join(tasks, "\n"),
-		Handoff:      "",
-		Unsynced:     setup.UnsyncedCommits(),
-		TaskContexts: taskContexts,
-	}, nil
-}
 
 func BuildContextPackage(ctx *ContextData, task, project string) string {
 	var lines []string
@@ -319,29 +247,6 @@ func resolveFocus(ctx *ContextData, taskName string) (snapshot, handoff, snapsho
 	return "", "", "", ""
 }
 
-func appendCompactCollaboration(lines *[]string, taskName, project string) {
-	artifacts, err := LoadCollaborationArtifacts(taskName, project)
-	if err != nil {
-		return
-	}
-	var parts []string
-	if artifacts.ProposalCount > 0 {
-		parts = append(parts, fmt.Sprintf("proposals=%d", artifacts.ProposalCount))
-	}
-	if artifacts.RequestCount > 0 {
-		parts = append(parts, fmt.Sprintf("requests=%d", artifacts.RequestCount))
-	}
-	if len(parts) > 0 {
-		*lines = append(*lines, "OPEN:"+strings.Join(parts, " | "))
-	}
-	if value := cleanCompactValue(artifacts.LatestResponse); value != "" {
-		*lines = append(*lines, "RESP:"+value)
-	}
-	if value := cleanCompactValue(artifacts.LatestDecision); value != "" {
-		*lines = append(*lines, "DECISION:"+value)
-	}
-}
-
 func compactDecisions(snapshot, projectData string) string {
 	var decisions []string
 	if value := cleanCompactValue(parse.ExtractField(snapshot, "locked decisions")); value != "" {
@@ -367,114 +272,6 @@ func cleanCompactValue(value string) string {
 	default:
 		return value
 	}
-}
-
-func LoadCollaborationArtifacts(taskName, project string) (*CollaborationArtifacts, error) {
-	if err := setup.ValidateTaskName(taskName); err != nil {
-		return nil, err
-	}
-	if err := setup.ValidateProjectName(project); err != nil {
-		return nil, err
-	}
-	taskDir := filepath.Join(setup.ContinuumPath(), "projects", project, "tasks", taskName)
-	artifacts := &CollaborationArtifacts{}
-
-	proposals, err := filestore.AllCapturesOfType(taskDir, filestore.ProposalCapture)
-	if err != nil {
-		return nil, err
-	}
-	requests, err := filestore.AllCapturesOfType(taskDir, filestore.RequestCapture)
-	if err != nil {
-		return nil, err
-	}
-	artifacts.ProposalCount = len(proposals)
-	artifacts.RequestCount = len(requests)
-	if len(proposals) > 0 {
-		artifacts.LatestProposal = latestArtifactSummary(proposals[len(proposals)-1])
-	}
-	if len(requests) > 0 {
-		artifacts.LatestRequest = latestArtifactSummary(requests[len(requests)-1])
-	}
-	if path, _, err := filestore.LatestCaptureOfType(taskDir, filestore.ResponseCapture); err == nil && path != "" {
-		artifacts.LatestResponse = latestArtifactSummary(path)
-	} else if err != nil {
-		return nil, err
-	}
-	if path, _, err := filestore.LatestCaptureOfType(taskDir, filestore.DecisionCapture); err == nil && path != "" {
-		artifacts.LatestDecision = latestArtifactSummary(path)
-	} else if err != nil {
-		return nil, err
-	}
-	return artifacts, nil
-}
-
-func appendCollaboration(lines []string, taskName, project string) []string {
-	artifacts, err := LoadCollaborationArtifacts(taskName, project)
-	if err != nil {
-		return lines
-	}
-	if artifacts.ProposalCount > 0 {
-		lines = append(lines, fmt.Sprintf("OPEN PROPOSALS: %d (latest: %s)", artifacts.ProposalCount, artifacts.LatestProposal))
-	}
-	if artifacts.RequestCount > 0 {
-		lines = append(lines, fmt.Sprintf("OPEN REQUESTS: %d (latest: %s)", artifacts.RequestCount, artifacts.LatestRequest))
-	}
-	if artifacts.LatestResponse != "" {
-		lines = append(lines, fmt.Sprintf("LATEST RESPONSE: %s", artifacts.LatestResponse))
-	}
-	if artifacts.LatestDecision != "" {
-		lines = append(lines, fmt.Sprintf("LATEST DECISION: %s", artifacts.LatestDecision))
-	}
-	return lines
-}
-
-func latestArtifactSummary(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "unreadable artifact"
-	}
-	content := string(data)
-	body := artifactBody(content)
-	for _, section := range []string{"decision", "recommendation", "response", "request", "proposal"} {
-		if value := parse.ExtractField(body, section); value != "" && value != "..." {
-			return compactSummary(value)
-		}
-	}
-	return compactSummary(firstUserArtifactLine(body))
-}
-
-func firstUserArtifactLine(content string) string {
-	for _, line := range splitLines(content) {
-		line = trimSpace(line)
-		if line == "" {
-			continue
-		}
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-		if strings.EqualFold(line, "## Last Updated") {
-			break
-		}
-		return line
-	}
-	return "content provided"
-}
-
-func artifactBody(content string) string {
-	lines := splitLines(content)
-	for i, line := range lines {
-		if strings.EqualFold(trimSpace(line), "## Capture Type") {
-			start := i + 1
-			for start < len(lines) && trimSpace(lines[start]) != "" {
-				start++
-			}
-			for start < len(lines) && trimSpace(lines[start]) == "" {
-				start++
-			}
-			return strings.Join(lines[start:], "\n")
-		}
-	}
-	return content
 }
 
 func compactSummary(value string) string {

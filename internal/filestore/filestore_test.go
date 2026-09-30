@@ -108,6 +108,26 @@ func TestAtomicWrite(t *testing.T) {
 	}
 }
 
+func TestWithinDirRejectsSiblingPrefix(t *testing.T) {
+	base := t.TempDir()
+	sibling := base + "-other"
+	if err := os.MkdirAll(sibling, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sibling, "x.md"), []byte("nope"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if WithinDir(base, filepath.Join(sibling, "x.md")) {
+		t.Fatal("a path under a sibling directory sharing the prefix was accepted")
+	}
+	if !WithinDir(base, filepath.Join(base, "x.md")) {
+		t.Fatal("a path inside the base directory was rejected")
+	}
+	if WithinDir(base, base) {
+		t.Fatal("the base directory itself is not a contained file")
+	}
+}
+
 func TestLatestSnapshot_Empty(t *testing.T) {
 	dir := t.TempDir()
 	path, name, err := LatestSnapshot(dir)

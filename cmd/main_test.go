@@ -303,22 +303,85 @@ func TestParseConfigSetArgs_RequiresTwoArgs(t *testing.T) {
 }
 
 func TestWatchArgs_ProjectAndInterval(t *testing.T) {
-	project := ""
-	interval := ""
-
-	for _, arg := range []string{"--project=my-project", "--interval=5s"} {
-		if val, ok := parseFlag(arg, "--project="); ok {
-			project = val
-		} else if val, ok := parseFlag(arg, "--interval="); ok {
-			interval = val
-		}
+	project, interval, tui, err := parseWatchArgs([]string{"--project=my-project", "--interval=5s", "--tui"})
+	if err != nil {
+		t.Fatalf("parseWatchArgs: %v", err)
 	}
-
 	if project != "my-project" {
 		t.Fatalf("expected project my-project, got %q", project)
 	}
-	if interval != "5s" {
-		t.Fatalf("expected interval 5s, got %q", interval)
+	if interval != 5*time.Second {
+		t.Fatalf("expected interval 5s, got %s", interval)
+	}
+	if !tui {
+		t.Fatal("expected TUI mode")
+	}
+}
+
+func TestParseWatchArgsRejectsInvalidIntervalAndUnknownArgument(t *testing.T) {
+	if _, _, _, err := parseWatchArgs([]string{"--interval=tomorrow"}); err == nil {
+		t.Fatal("expected invalid interval error")
+	}
+	if _, _, _, err := parseWatchArgs([]string{"unexpected"}); err == nil {
+		t.Fatal("expected usage error for unknown argument")
+	}
+}
+
+func TestParseImportArgs(t *testing.T) {
+	path, decrypt, algo := parseImportArgs([]string{"archive.zip", "--decrypt=aes-gcm-v2"})
+	if path != "archive.zip" || !decrypt || algo != "aes-gcm-v2" {
+		t.Fatalf("unexpected parse result: %q %v %q", path, decrypt, algo)
+	}
+	path, decrypt, algo = parseImportArgs([]string{"archive.zip", "--decrypt"})
+	if path != "archive.zip" || !decrypt || algo != "" {
+		t.Fatalf("unexpected default decrypt result: %q %v %q", path, decrypt, algo)
+	}
+}
+
+func TestParseTaskCommandArgs(t *testing.T) {
+	project, taskName, autoConfirm := parseTaskCommandArgs([]string{"--project=my-project", "--yes", "my-task"})
+	if project != "my-project" || taskName != "my-task" || !autoConfirm {
+		t.Fatalf("unexpected parse result: %q %q %v", project, taskName, autoConfirm)
+	}
+}
+
+func TestParseProjectDeleteArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantProject string
+		wantConfirm bool
+		wantErr     bool
+	}{
+		{name: "valid", args: []string{"my-project", "--yes"}, wantProject: "my-project", wantConfirm: true},
+		{name: "unknown flag", args: []string{"--force"}, wantErr: true},
+		{name: "missing project", wantErr: true},
+		{name: "duplicate project", args: []string{"first", "second"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			project, autoConfirm, err := parseProjectDeleteArgs(tt.args)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseProjectDeleteArgs(%v) error = %v, want error %v", tt.args, err, tt.wantErr)
+			}
+			if project != tt.wantProject || autoConfirm != tt.wantConfirm {
+				t.Fatalf("parseProjectDeleteArgs(%v) = %q, %v; want %q, %v", tt.args, project, autoConfirm, tt.wantProject, tt.wantConfirm)
+			}
+		})
+	}
+}
+
+func TestParseSnapshotArgs(t *testing.T) {
+	project, taskName, autoConfirm, keep, err := parseSnapshotArgs([]string{"my-task", "--project=my-project", "--yes", "--keep=3"})
+	if err != nil || project != "my-project" || taskName != "my-task" || !autoConfirm || keep != 3 {
+		t.Fatalf("unexpected parse result: %q %q %v %d %v", project, taskName, autoConfirm, keep, err)
+	}
+	_, _, _, keep, err = parseSnapshotArgs([]string{"my-task", "--keep=0"})
+	if err != nil || keep != 10 {
+		t.Fatalf("expected non-positive keep to reset to default, got %d (%v)", keep, err)
+	}
+	if _, _, _, _, err := parseSnapshotArgs([]string{"my-task", "--keep=invalid"}); err == nil {
+		t.Fatal("expected invalid keep error")
 	}
 }
 

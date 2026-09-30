@@ -109,8 +109,14 @@ Instead, each public release is a fresh squash of the current `develop`.
 
 From a clean worktree:
 
+Before squashing, update `CHANGELOG.md` on `develop` for the intended version,
+including user-visible changes since the previous public release. Commit and
+push the tested development changes to `dev/develop`. Fetch `origin` and
+fast-forward local `main` to `origin/main` before preparing the squash.
+
 ```bash
 git checkout main
+git pull --ff-only origin main
 git merge --squash develop
 git commit -m "build: prepare public release vX.Y.Z"
 ```
@@ -139,6 +145,11 @@ The public `release.yml` workflow runs on `v*` tags and should publish:
 
 It creates a GitHub draft release. Review or edit its notes, then publish the
 draft explicitly with `gh release edit vX.Y.Z --draft=false`.
+
+Use the version's entry in `CHANGELOG.md` as the release notes, rather than relying
+only on GoReleaser's commit list: the public squash commit does not describe all
+changes. Set those notes with `gh release edit vX.Y.Z --notes-file <notes-file>`
+before publishing the draft. Verify all expected archives and checksums are present.
 
 ## Homebrew
 

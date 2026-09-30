@@ -124,7 +124,7 @@ func PullLatest() error {
 		return fmt.Errorf("Local Continuum storage has uncommitted changes. Showing local state.")
 	}
 	if err := git.Pull(base); err != nil {
-		return fmt.Errorf("Could not pull from origin. Showing local state.")
+		return fmt.Errorf("%w Showing local state.", remoteOperationError("pull from", err))
 	}
 	return nil
 }
@@ -236,7 +236,7 @@ func SyncWithOptions(options SyncOptions) (SyncResult, error) {
 			if err := git.Execute(base, "fetch", "origin", "main", "--quiet"); err != nil {
 				_ = events.Append("", "", "sync", "error", "fetch failed")
 				result.LogEntry = newLogEntrySince(beforeLog)
-				return result, fmt.Errorf("Could not fetch from origin.")
+				return result, remoteOperationError("fetch from", err)
 			}
 			result.RemoteAheadBefore = countRange(git, base, "HEAD..origin/main")
 			result.LocalAheadBefore = countRange(git, base, "origin/main..HEAD")
@@ -253,7 +253,7 @@ func SyncWithOptions(options SyncOptions) (SyncResult, error) {
 				}
 				_ = events.Append("", "", "sync", "error", "push failed")
 				result.LogEntry = newLogEntrySince(beforeLog)
-				return result, fmt.Errorf("Could not push to origin.")
+				return result, remoteOperationError("push to", err)
 			}
 		}
 		_ = ClearUnsynced()
@@ -269,7 +269,7 @@ func SyncWithOptions(options SyncOptions) (SyncResult, error) {
 			if err := git.Execute(base, "fetch", "origin", "main", "--quiet"); err != nil {
 				_ = events.Append("", "", "sync", "error", "fetch failed")
 				result.LogEntry = newLogEntrySince(beforeLog)
-				return result, fmt.Errorf("Could not fetch from origin.")
+				return result, remoteOperationError("fetch from", err)
 			}
 			result.RemoteAheadBefore = countRange(git, base, "HEAD..origin/main")
 			result.LocalAheadBefore = countRange(git, base, "origin/main..HEAD")
@@ -294,13 +294,13 @@ func SyncWithOptions(options SyncOptions) (SyncResult, error) {
 		if err := git.Execute(base, "fetch", "origin", "main", "--quiet"); err != nil {
 			_ = events.Append("", "", "sync", "error", "fetch failed")
 			result.LogEntry = newLogEntrySince(beforeLog)
-			return result, fmt.Errorf("Could not fetch from origin.")
+			return result, remoteOperationError("fetch from", err)
 		}
 		result.PullCount = countRange(git, base, "HEAD..origin/main")
 		if err := git.Pull(base); err != nil {
 			_ = events.Append("", "", "sync", "error", "pull failed")
 			result.LogEntry = newLogEntrySince(beforeLog)
-			return result, fmt.Errorf("Could not pull from origin.")
+			return result, remoteOperationError("pull from", err)
 		}
 		result.PushCount = countRange(git, base, "origin/main..HEAD")
 	} else {
@@ -315,7 +315,7 @@ func SyncWithOptions(options SyncOptions) (SyncResult, error) {
 			}
 			_ = events.Append("", "", "sync", "error", "push failed")
 			result.LogEntry = newLogEntrySince(beforeLog)
-			return result, fmt.Errorf("Could not push to origin.")
+			return result, remoteOperationError("push to", err)
 		}
 	}
 

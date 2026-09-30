@@ -233,6 +233,21 @@ Run agnostic agent test
 	}
 }
 
+func writeCollaborationArtifacts(t *testing.T, taskDir, proposal, request, response, decision string) {
+	t.Helper()
+	files := map[string]string{
+		"proposal.20260412T100000Z.aaaaaa.md": "# TASK PROPOSAL\n\n## Capture Type\nproposal\n\n## Proposal\n" + proposal + "\n",
+		"request.20260412T110000Z.bbbbbb.md":  "# TASK REQUEST\n\n## Capture Type\nrequest\n\n## Request\n" + request + "\n",
+		"response.20260412T120000Z.cccccc.md": "# TASK RESPONSE\n\n## Capture Type\nresponse\n\n## Response\n" + response + "\n",
+		"decision.20260412T130000Z.dddddd.md": "# TASK DECISION\n\n## Capture Type\ndecision\n\n## Decision\n" + decision + "\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(taskDir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s): %v", name, err)
+		}
+	}
+}
+
 func TestLoadCollaborationArtifactsSummarizesTypedCaptures(t *testing.T) {
 	base := t.TempDir()
 	t.Setenv("CONTINUUM_PATH", base)
@@ -240,17 +255,7 @@ func TestLoadCollaborationArtifactsSummarizesTypedCaptures(t *testing.T) {
 	if err := os.MkdirAll(taskDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	files := map[string]string{
-		"proposal.20260412T100000Z.aaaaaa.md": "# TASK PROPOSAL\n\n## Task\nagent-flow\n\n## Project\nmyproject\n\n## Capture Type\nproposal\n\n## Proposal\nUse --type for collaboration notes.\n",
-		"request.20260412T110000Z.bbbbbb.md":  "# TASK REQUEST\n\n## Task\nagent-flow\n\n## Project\nmyproject\n\n## Capture Type\nrequest\n\n## Request\nClaude should review the parser.\n",
-		"response.20260412T120000Z.cccccc.md": "# TASK RESPONSE\n\n## Task\nagent-flow\n\n## Project\nmyproject\n\n## Capture Type\nresponse\n\n## Recommendation\nKeep one command and use --type.\n",
-		"decision.20260412T130000Z.dddddd.md": "# TASK DECISION\n\n## Task\nagent-flow\n\n## Project\nmyproject\n\n## Capture Type\ndecision\n\n## Decision\nAdopt typed captures.\n",
-	}
-	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(taskDir, name), []byte(content), 0o644); err != nil {
-			t.Fatalf("WriteFile(%s): %v", name, err)
-		}
-	}
+	writeCollaborationArtifacts(t, taskDir, "Use --type for collaboration notes.", "Claude should review the parser.", "Keep one command and use --type.", "Adopt typed captures.")
 
 	artifacts, err := LoadCollaborationArtifacts("agent-flow", "myproject")
 	if err != nil {
@@ -279,9 +284,7 @@ func TestBuildContextPackageAddsCollaborationWithoutChangingState(t *testing.T) 
 	if err := os.MkdirAll(taskDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(taskDir, "proposal.20260412T100000Z.aaaaaa.md"), []byte("# TASK PROPOSAL\n\n## Capture Type\nproposal\n\n## Proposal\nReview typed capture flow.\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
+	writeCollaborationArtifacts(t, taskDir, "Review typed capture flow.", "Confirm the contract.", "The contract is stable.", "Keep typed captures.")
 	snapshot := `# TASK SNAPSHOT
 
 ## Objective
@@ -303,6 +306,86 @@ Run tests
 	for _, expected := range []string{
 		"CURRENT STATE: State remains authoritative",
 		"OPEN PROPOSALS: 1 (latest: Review typed capture flow.)",
+		"OPEN REQUESTS: 1 (latest: Confirm the contract.)",
+		"LATEST RESPONSE: The contract is stable.",
+		"LATEST DECISION: Keep typed captures.",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Errorf("output missing %q\noutput:\n%s", expected, output)
+		}
+	}
+}
+
+func TestBuildContextPackageUsesArtifactFallbackSummary(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("CONTINUUM_PATH", base)
+	taskDir := filepath.Join(base, "projects", "myproject", "tasks", "agent-flow")
+	if err := os.MkdirAll(taskDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	content := "# TASK PROPOSAL\n\n## Capture Type\nproposal\n\n## Notes\n"
+	if err := os.WriteFile(filepath.Join(taskDir, "proposal.20260412T100000Z.aaaaaa.md"), []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	output := BuildContextPackage(&ContextData{Snapshot: "## Objective\nKeep summaries safe\n"}, "agent-flow", "myproject")
+	if !strings.Contains(output, "OPEN PROPOSALS: 1 (latest: content provided)") {
+		t.Fatalf("expected fallback artifact summary\noutput:\n%s", output)
+	}
+}
+
+func TestBuildContextPackageBoundsWorkingStyleAndShowsUnsynced(t *testing.T) {
+	var profile strings.Builder
+	profile.WriteString("## Working Style\n")
+	for i := 1; i <= 10; i++ {
+		profile.WriteString("- rule ")
+		profile.WriteString(string(rune('0' + i)))
+		profile.WriteString("\n")
+	}
+	ctx := &ContextData{
+		Profile:  profile.String(),
+		Project:  "## Summary\nmy project\n",
+		Unsynced: []string{"one", "two"},
+	}
+
+	output := BuildContextPackage(ctx, "", "myproject")
+	if !strings.Contains(output, "UNSYNCED: 2 commit(s) pending upload") {
+		t.Fatalf("expected unsynced summary\noutput:\n%s", output)
+	}
+	if strings.Count(output, "- rule ") != 8 || strings.Contains(output, "- rule 9") {
+		t.Fatalf("expected working style cap of eight\noutput:\n%s", output)
+	}
+}
+
+func TestBuildContextPackageLimitsAvailableTasks(t *testing.T) {
+	ctx := &ContextData{
+		Project: "## Summary\nmy project\n",
+		TaskContexts: map[string]*ContextData{
+			"alpha": {}, "beta": {}, "gamma": {}, "delta": {},
+		},
+	}
+
+	output := BuildContextPackage(ctx, "", "myproject")
+	if !strings.Contains(output, "CURRENT FOCUS: not yet defined (available:") || !strings.Contains(output, "OBJECTIVE: not yet defined") {
+		t.Fatalf("expected bounded no-focus output\noutput:\n%s", output)
+	}
+}
+
+func TestBuildCompactContextPackageAddsCollaboration(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("CONTINUUM_PATH", base)
+	taskDir := filepath.Join(base, "projects", "myproject", "tasks", "agent-flow")
+	if err := os.MkdirAll(taskDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	writeCollaborationArtifacts(t, taskDir, "Review the parser.", "Confirm the contract.", "The contract is stable.", "Keep typed captures.")
+
+	ctx := &ContextData{Snapshot: "## Objective\nKeep collaboration visible\n"}
+	output := BuildCompactContextPackage(ctx, "agent-flow", "myproject")
+	for _, expected := range []string{
+		"OPEN:proposals=1 | requests=1",
+		"RESP:The contract is stable.",
+		"DECISION:Keep typed captures.",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Errorf("output missing %q\noutput:\n%s", expected, output)

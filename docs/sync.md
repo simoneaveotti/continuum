@@ -103,6 +103,40 @@ ctx init --remote=<url>
 
 The `local/unsynced` file lists pending commit hashes, and `local/git.log` records real git errors. `ctx context` surfaces pending unsynced commits so agents can act accordingly.
 
+### Authentication failures
+
+When Git reports an HTTPS authentication failure during fetch, pull, or push,
+Continuum explains that the token may have expired or been revoked, or that saved
+credentials may be invalid. This guidance also appears when `ctx context` cannot
+pull the latest state. Continuum cannot determine the token's expiry date from a
+generic authentication rejection.
+
+Renew the token with your Git provider, grant access to the storage repository,
+and update the credentials used by Git on this machine. For GitHub users who
+authenticate through GitHub CLI:
+
+```bash
+gh auth login --hostname github.com --git-protocol https
+gh auth setup-git --hostname github.com
+ctx sync
+```
+
+GitHub CLI is an optional authentication helper, not a Continuum dependency.
+If you use another credential manager, replace the saved token there instead.
+Running `git fetch` alone does not renew a token.
+
+For `Permission denied (publickey)`, Continuum reports an SSH authentication
+failure: check that the SSH key is loaded and authorized for the repository.
+Network failures, branch protection, and push lease rejections do not trigger
+the token-renewal message. The new guidance does not include raw Git stderr or
+remote URLs that might contain credentials; treat diagnostic log files as private.
+
+If sync reports uncommitted local storage changes, resolve those separately.
+`ctx sync --prefer=local --force` preserves local changes but can replace
+remote-only history; `--prefer=remote --force` discards local changes and
+local-only commits. Neither option renews credentials. Use ordinary `ctx sync`
+after reauthentication unless you intentionally need one of these strategies.
+
 ## Watch Mode
 
 `ctx watch [--project=<name>] [--interval=<duration>]` is the current visibility MVP.
